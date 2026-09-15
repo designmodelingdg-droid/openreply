@@ -1,4 +1,4 @@
-import { FOLLOW_GATE_BRAND as brand } from "@/lib/follow-gate/brand";
+import { BRAND as brand } from "@/lib/brand";
 
 export type GateAction = {
   label: string;

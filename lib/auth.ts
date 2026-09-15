@@ -5,6 +5,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db/client";
 import { ensureWorkspaceForUser, getPrimaryWorkspace } from "@/lib/workspace";
 import { isEmailAllowedToSignIn } from "@/lib/env";
+import { buildSignInEmail } from "@/lib/auth-email";
 
 type AdapterPrismaClient = Parameters<typeof PrismaAdapter>[0];
 
@@ -28,6 +29,28 @@ export const authConfig = {
       : Resend({
           apiKey: process.env.RESEND_API_KEY ?? "missing-resend-api-key",
           from: emailFrom,
+          async sendVerificationRequest({ identifier, url, provider }) {
+            const { subject, text, html } = buildSignInEmail({ url });
+            const response = await fetch("https://api.resend.com/emails", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${provider.apiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                from: provider.from,
+                to: identifier,
+                subject,
+                html,
+                text,
+              }),
+            });
+            if (!response.ok) {
+              throw new Error(
+                `Resend error: ${JSON.stringify(await response.json())}`
+              );
+            }
+          },
         }),
   ],
   callbacks: {
