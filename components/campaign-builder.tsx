@@ -43,6 +43,7 @@ interface LoadedCampaign {
   openingDmButtonLabel: string | null;
   linkButtonLabel: string | null;
   requireFollow: boolean;
+  followGateWeb: boolean;
   followPromptMessage: string | null;
   followPromptButtonLabel: string | null;
   followRepromptMessage: string | null;
@@ -176,6 +177,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
   const [secondaryDestinationUrl, setSecondaryDestinationUrl] = useState("");
   const [secondaryButtonLabel, setSecondaryButtonLabel] = useState("Open link");
   const [requireFollow, setRequireFollow] = useState(false);
+  const [followGateWeb, setFollowGateWeb] = useState(false);
   const [followPromptMessage, setFollowPromptMessage] = useState("");
   const [followPromptButtonLabel, setFollowPromptButtonLabel] =
     useState("i'm following");
@@ -285,6 +287,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         setSecondaryButtonLabel(secondLink?.label ?? "Open link");
         setSecondLinkOpen(Boolean(secondLink?.destinationUrl));
         setRequireFollow(c.requireFollow ?? false);
+        setFollowGateWeb(c.followGateWeb ?? false);
         setFollowPromptMessage(c.followPromptMessage ?? "");
         setFollowPromptButtonLabel(
           c.followPromptButtonLabel ?? "i'm following"
@@ -426,6 +429,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       secondaryDestinationUrl: secondaryDestinationUrl.trim() || "",
       secondaryButtonLabel: secondaryButtonLabel.trim() || "Open link",
       requireFollow,
+      followGateWeb: requireFollow ? followGateWeb : false,
       followPromptMessage: requireFollow ? followPromptMessage.trim() : "",
       followPromptButtonLabel: requireFollow
         ? followPromptButtonLabel.trim() || "i'm following"
@@ -847,6 +851,23 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
             </div>
             {requireFollow && (
               <div className="mt-3 space-y-2">
+                <div className="flex items-start justify-between gap-3 rounded-lg border border-border p-3">
+                  <div>
+                    <span className="text-sm text-foreground">
+                      verify on a web page
+                    </span>
+                    <p className="mt-1 text-xs text-muted">
+                      Turn this on when another tool owns your Instagram inbox.
+                      The button in the DM opens a page that checks the follow
+                      and hands over the link there, so the whole gate fits in
+                      the one message Instagram lets us send.
+                    </p>
+                  </div>
+                  <Toggle
+                    on={followGateWeb}
+                    onToggle={() => setFollowGateWeb(!followGateWeb)}
+                  />
+                </div>
                 <textarea
                   value={followPromptMessage}
                   onChange={(e) => setFollowPromptMessage(e.target.value)}

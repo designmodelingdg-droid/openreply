@@ -33,6 +33,7 @@ const createAutomationSchema = z
     openingDmButtonLabel: z.string().max(64).optional().nullable(),
     linkButtonLabel: z.string().max(20).optional().nullable(),
     requireFollow: z.boolean().optional().default(false),
+    followGateWeb: z.boolean().optional().default(false),
     followPromptMessage: z.string().max(1000).optional().nullable(),
     followPromptButtonLabel: z.string().max(20).optional().nullable(),
     followRepromptMessage: z.string().max(1000).optional().nullable(),
@@ -98,6 +99,7 @@ const updateAutomationSchema = z.object({
   openingDmButtonLabel: z.string().max(64).optional().nullable(),
   linkButtonLabel: z.string().max(20).optional().nullable(),
   requireFollow: z.boolean().optional(),
+  followGateWeb: z.boolean().optional(),
   followPromptMessage: z.string().max(1000).optional().nullable(),
   followPromptButtonLabel: z.string().max(20).optional().nullable(),
   followRepromptMessage: z.string().max(1000).optional().nullable(),
@@ -409,6 +411,9 @@ export async function POST(request: NextRequest) {
         : null,
       linkButtonLabel: parsed.data.linkButtonLabel || null,
       requireFollow: parsed.data.requireFollow,
+      followGateWeb: parsed.data.requireFollow
+        ? parsed.data.followGateWeb
+        : false,
       followPromptMessage: parsed.data.requireFollow
         ? parsed.data.followPromptMessage || null
         : null,
@@ -521,6 +526,7 @@ export async function PATCH(request: NextRequest) {
     automationData.openingDmButtonLabel = null;
   }
   if (automationData.requireFollow === false) {
+    automationData.followGateWeb = false;
     automationData.followPromptMessage = null;
     automationData.followPromptButtonLabel = null;
     automationData.followRepromptMessage = null;

@@ -200,6 +200,14 @@ model Automation {
   /// Sent after the resource, to open a conversation the sales bot can pick
   /// up. Only used on the handoff path, where another app owns the thread.
   postDeliveryQuestion    String?
+  /// Verify the follow on a web page instead of inside the DM thread.
+  ///
+  /// The in-thread gate needs a second and a third message (re-prompt, then
+  /// the resource), and those are exactly what Meta rejects when another app
+  /// owns the thread. With this on, the one message we are allowed to send
+  /// carries a per-person link; the follow is verified when that link is
+  /// opened, and the answer is given on the page instead of in the DM.
+  followGateWeb           Boolean @default(false)
   followUpEnabled Boolean @default(false)
   followUpMessage String?
   // Minutes to wait after the link is delivered before sending the follow-up.
@@ -221,6 +229,7 @@ model Automation {
   dmLogs           DmLog[]
   trackedLinks     TrackedLink[]
   linkClicks       LinkClick[]
+  followGates      FollowGate[]
 
   @@index([workspaceId])
   @@index([instagramAccountId])
@@ -417,4 +426,32 @@ model ZernioConnection {
 model PostbackDelivery {
   id String @id
   createdAt DateTime @default(now())
+}
+
+/// One web follow-gate link, issued to one person for one campaign.
+///
+/// The token is what makes the gate verifiable: the page it opens knows who
+/// tapped it without asking, so it can ask Meta whether that exact person
+/// follows the account. Re-issued rather than duplicated — someone who
+/// comments twice on the same campaign keeps the same link.
+model FollowGate {
+  id            String    @id @default(cuid())
+  token         String    @unique
+  automationId  String
+  /// Instagram-scoped ID of the person the link was issued to.
+  igsid         String
+  commenterName String?
+  createdAt     DateTime  @default(now())
+  /// Last time the page asked Meta about this person, and how many times it
+  /// has — a gate opened over and over is a follow that never happens.
+  lastCheckedAt DateTime?
+  checkCount    Int       @default(0)
+  /// First time the check came back as following. Kept so a returning visitor
+  /// is not re-verified after they have already been let through.
+  passedAt      DateTime?
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@unique([automationId, igsid])
+  @@index([automationId])
 }

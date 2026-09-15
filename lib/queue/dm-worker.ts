@@ -17,6 +17,7 @@ import {
   getFollowHandoffUrl,
   sendFollowHandoff,
 } from "@/lib/handoff/follow-handoff";
+import { buildFollowGateUrl, issueFollowGate } from "@/lib/follow-gate/gate";
 import {
   MetaApiError,
   RateLimitError,
@@ -601,7 +602,14 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     // With an opening DM, the private reply is a button message; tapping it
     // fires a postback that delivers the reveal (see processPostback). Without
     // one, we send the reveal text directly as today.
+    // The web gate asks for the follow on a page instead of in the thread, so
+    // the only DM it needs is the one carrying the link. It also replaces the
+    // opening DM: that button is a postback, and answering a postback means
+    // sending a second message — the exact thing the web gate exists to avoid.
+    const webFollowGate = automation.requireFollow && automation.followGateWeb;
+
     const useOpeningDm =
+      !webFollowGate &&
       automation.openingDmEnabled &&
       Boolean(automation.openingDmMessage) &&
       Boolean(automation.openingDmButtonLabel);
@@ -612,7 +620,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     // status at comment time: confirmed followers get the link now, everyone
     // else gets the "follow me first" prompt (re-verified on tap).
     let sendFollowPrompt = false;
-    if (automation.requireFollow && !useOpeningDm) {
+    if (automation.requireFollow && !useOpeningDm && !webFollowGate) {
       const alreadyFollows = await getUserFollowStatus({
         context: accessToken,
         recipientId: commenterId,
@@ -624,7 +632,54 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     }
 
     try {
-      if (useOpeningDm) {
+      if (webFollowGate) {
+        const gateUrl = buildFollowGateUrl(
+          await issueFollowGate({
+            automationId: automation.id,
+            igsid: commenterId,
+            commenterName,
+          })
+        );
+        const promptText = renderMessageWithoutLink({
+          message:
+            automation.followPromptMessage ||
+            "Antes de enviartelo: sigueme y toca el boton de abajo. Verifico al instante y te lo entrego ahi mismo.",
+          commenterName,
+        });
+        const gateButton = {
+          title: automation.followPromptButtonLabel || "Ya te sigo",
+          url: gateUrl,
+        };
+
+        try {
+          await sendPrivateReplyWithLinkButton({
+            context: accessToken,
+            instagramAccountId: automation.instagramAccount.instagramId,
+            commentId: commentId,
+            text: promptText,
+            buttons: [gateButton],
+            postId: mediaId,
+          });
+        } catch (buttonError) {
+          if (!isTemplateRejection(buttonError)) throw buttonError;
+
+          console.log(
+            "[DM Worker] Gate button template rejected, falling back to inline link:",
+            formatError(buttonError)
+          );
+          try {
+            await sendPrivateReply({
+              context: accessToken,
+              instagramAccountId: automation.instagramAccount.instagramId,
+              commentId: commentId,
+              message: `${promptText}\n${gateUrl}`,
+              postId: mediaId,
+            });
+          } catch {
+            throw buttonError;
+          }
+        }
+      } else if (useOpeningDm) {
         const openingText = renderMessageWithTracking({
           message: automation.openingDmMessage as string,
           commenterName,

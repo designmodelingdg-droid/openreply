@@ -36,6 +36,9 @@ const {
     operationalEvent: {
       create: vi.fn(),
     },
+    followGate: {
+      upsert: vi.fn(),
+    },
   },
   mockSendPrivateReply: vi.fn(),
   mockSendPrivateReplyWithLinkButton: vi.fn(),
@@ -665,6 +668,45 @@ describe("DM Worker — Full Pipeline", () => {
       "followcheck:auto_789"
     );
     expect(mockSendPrivateReplyWithLinkButton).not.toHaveBeenCalled();
+    expect(mockSendPrivateReply).not.toHaveBeenCalled();
+  });
+
+  it("should send one gate link instead of a postback when the web gate is on", async () => {
+    mockPrisma.followGate.upsert.mockResolvedValue({ token: "gate_tok" });
+    mockPrisma.automation.findMany.mockResolvedValue([
+      {
+        ...mockAutomation,
+        requireFollow: true,
+        followGateWeb: true,
+        followPromptMessage: "Follow me first {username}, then tap 👇",
+        followPromptButtonLabel: "Ya te sigo",
+        trackedLinks: [
+          {
+            slug: "abc123",
+            label: "Primary campaign link",
+            destinationUrl: "https://example.com",
+          },
+        ],
+      },
+    ]);
+
+    const processor = getProcessor();
+    await processor(createMockJob());
+
+    // The whole gate now fits in the one message we are allowed to send: a
+    // link button to this person's own gate page. No follow check at comment
+    // time — the page does it when the button is tapped.
+    expect(mockGetUserFollowStatus).not.toHaveBeenCalled();
+    expect(mockSendPrivateReplyWithButton).not.toHaveBeenCalled();
+    expect(mockSendPrivateReplyWithLinkButton).toHaveBeenCalledWith(
+      "decrypted_token",
+      "ig_456",
+      "comment_555",
+      "Follow me first commenter_user, then tap 👇",
+      [{ title: "Ya te sigo", url: "http://localhost:3000/g/gate_tok" }]
+    );
+    // The resource link is never in that message — it is what the gate hands
+    // over once the follow checks out.
     expect(mockSendPrivateReply).not.toHaveBeenCalled();
   });
 
