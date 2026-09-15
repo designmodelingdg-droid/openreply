@@ -21,12 +21,20 @@ export function GateScreen({
   title,
   body,
   actions,
+  question,
   footnote,
 }: {
   eyebrow?: string | null;
   title: string;
   body?: string | null;
   actions: GateAction[];
+  /**
+   * Asked after the resource is handed over, with the button that opens the
+   * DM thread to answer it. The reply is what starts the conversation — and
+   * it has to come from them, because a message from us would be the second
+   * one in the thread and Instagram rejects it.
+   */
+  question?: { text: string; action: GateAction } | null;
   footnote?: string | null;
 }) {
   return (
@@ -135,6 +143,44 @@ export function GateScreen({
               </a>
             ))}
           </div>
+
+          {question ? (
+            <div
+              style={{
+                marginTop: "28px",
+                paddingTop: "24px",
+                borderTop: `1px solid ${brand.naranjaPalido}`,
+              }}
+            >
+              <p
+                style={{
+                  margin: "0 0 16px",
+                  fontSize: "16px",
+                  lineHeight: 1.55,
+                  color: brand.azulNavy,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {question.text}
+              </p>
+              <a
+                href={question.action.href}
+                style={{
+                  display: "block",
+                  padding: "15px 20px",
+                  borderRadius: "12px",
+                  fontFamily: "Overpass, system-ui, sans-serif",
+                  fontSize: "16px",
+                  fontWeight: 700,
+                  textDecoration: "none",
+                  background: brand.azulPrincipal,
+                  color: "#ffffff",
+                }}
+              >
+                {question.action.label}
+              </a>
+            </div>
+          ) : null}
 
           {footnote ? (
             <p

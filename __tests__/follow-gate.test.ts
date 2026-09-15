@@ -39,6 +39,7 @@ function gateRow(
   overrides: {
     passedAt?: Date | null;
     trackedLinks?: { slug: string; label: string | null }[];
+    postDeliveryQuestion?: string | null;
   } = {}
 ) {
   return {
@@ -50,6 +51,7 @@ function gateRow(
       isActive: true,
       linkButtonLabel: "Descargar la guía",
       followRepromptMessage: null,
+      postDeliveryQuestion: overrides.postDeliveryQuestion ?? null,
       trackedLinks: overrides.trackedLinks ?? [
         { slug: "abc123", label: "Guía" },
       ],
@@ -216,6 +218,43 @@ describe("follow gate page", () => {
       "Descargar la guía",
       "Entrar a comunidad",
     ]);
+  });
+
+  // The question is the handover to whoever runs the inbox, so it must be seen
+  // — which means the shortcut straight to the resource has to give way.
+  it("shows the open question instead of redirecting, with a link to the DMs", async () => {
+    mockPrisma.followGate.findUnique.mockResolvedValue(
+      gateRow({ postDeliveryQuestion: "¿Qué buscas lograr?" })
+    );
+    mockFollowStatus.mockResolvedValue({ follows: true, detail: "ok: true" });
+
+    const result = await render(INSTAGRAM_IN_APP_BROWSER);
+
+    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(actionsOf(result)[0].href).toBe(
+      "https://openreply.example/r/abc123"
+    );
+    const question = result?.props.question as {
+      text: string;
+      action: Action;
+    };
+    expect(question.text).toBe("¿Qué buscas lograr?");
+    // They answer first; a message from us would be the second in the thread.
+    expect(question.action.href).toBe(
+      "https://ig.me/m/design_modeling_dg"
+    );
+  });
+
+  it("keeps the straight-to-resource shortcut when there is no question", async () => {
+    mockPrisma.followGate.findUnique.mockResolvedValue(gateRow());
+    mockFollowStatus.mockResolvedValue({ follows: true, detail: "ok: true" });
+
+    const result = await render(INSTAGRAM_IN_APP_BROWSER);
+
+    expect(mockRedirect).toHaveBeenCalledWith(
+      "https://openreply.example/r/abc123"
+    );
+    expect(result?.props.question ?? null).toBeNull();
   });
 
   it("does not re-verify someone who already passed the gate", async () => {

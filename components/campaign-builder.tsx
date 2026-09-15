@@ -904,8 +904,9 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                   maxLength={1000}
                 />
                 <p className="text-xs text-muted">
-                  Optional question sent after the link, to open a conversation
-                  your inbox tool can pick up. Only used on the handoff path.
+                  Optional question shown with the resource, next to a button
+                  that opens your DMs to answer it. Their reply is what starts
+                  the conversation your inbox tool picks up.
                 </p>
                 <p className="text-xs text-muted">
                   We send the link only after they tap the button and Instagram

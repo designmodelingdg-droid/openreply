@@ -56,6 +56,7 @@ export default async function FollowGatePage({
           isActive: true,
           linkButtonLabel: true,
           followRepromptMessage: true,
+          postDeliveryQuestion: true,
           trackedLinks: {
             orderBy: { createdAt: "asc" },
             select: { slug: true, label: true },
@@ -91,6 +92,11 @@ export default async function FollowGatePage({
     automation.trackedLinks,
     automation.linkButtonLabel
   );
+  const delivery = {
+    links,
+    question: automation.postDeliveryQuestion,
+    username: account.username,
+  };
 
   // A link preview crawler hits this URL the moment the DM is delivered,
   // before anyone taps anything. Give it a page to show, but never spend a
@@ -110,7 +116,7 @@ export default async function FollowGatePage({
   // Already verified once: let them back in without asking Meta again, so a
   // link they reopen next week still works.
   if (gate.passedAt) {
-    return deliver(links);
+    return deliver(delivery);
   }
 
   let follows: boolean | null = null;
@@ -196,21 +202,47 @@ export default async function FollowGatePage({
 
   // Following — or Instagram would not say, in which case we let them through
   // rather than trap a real follower behind an answer we cannot get.
-  return deliver(links);
+  return deliver(delivery);
 }
 
-function deliver(links: GateAction[]) {
-  // One resource: send them straight to it, through /r/<slug> so the click is
-  // counted. More than one: they have to choose, so show the buttons.
-  if (links.length === 1) redirect(links[0].href);
+function deliver({
+  links,
+  question,
+  username,
+}: {
+  links: GateAction[];
+  question: string | null;
+  username: string;
+}) {
+  const questionText = question?.trim();
+
+  // The open question is the handover to whoever runs the inbox, so it has to
+  // be seen. Redirecting straight to the resource would skip the page it lives
+  // on, so that shortcut only applies when there is no question to ask.
+  if (links.length === 1 && !questionText) redirect(links[0].href);
+
+  const questionBlock = questionText
+    ? {
+        text: questionText,
+        action: {
+          // They answer in the thread, and their reply is the first message
+          // its owner receives — which is what lets a bot pick it up. A
+          // message from us would be the second one, and rejected.
+          label: "Responder por Instagram",
+          href: `https://ig.me/m/${encodeURIComponent(username)}`,
+          variant: "primary" as const,
+        },
+      }
+    : null;
 
   if (links.length === 0) {
     return (
       <GateScreen
         eyebrow="¡Listo!"
         title="Ya estás dentro 🎉"
-        body="Vuelve a Instagram, te escribo por ahí."
+        body={questionText ? null : "Vuelve a Instagram, te escribo por ahí."}
         actions={[]}
+        question={questionBlock}
       />
     );
   }
@@ -219,8 +251,13 @@ function deliver(links: GateAction[]) {
     <GateScreen
       eyebrow="¡Listo!"
       title="Aquí tienes 🎉"
-      body="Gracias por seguirme. Abre lo que necesites:"
+      body={
+        links.length > 1
+          ? "Gracias por seguirme. Abre lo que necesites:"
+          : "Gracias por seguirme. Aquí está lo que te prometí:"
+      }
       actions={links}
+      question={questionBlock}
     />
   );
 }
