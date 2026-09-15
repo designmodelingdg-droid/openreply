@@ -64,6 +64,12 @@ vi.mock("@/lib/meta/client", () => ({
   sendPrivateReplyWithLinkButton: mockSendPrivateReplyWithLinkButton,
   sendPrivateReplyWithButton: mockSendPrivateReplyWithButton,
   getUserFollowStatus: mockGetUserFollowStatus,
+  // The provider layer calls the detailed variant and reads .follows off it;
+  // keep the plain mock as the single place a test sets the answer.
+  getUserFollowStatusDetailed: async (...args: unknown[]) => ({
+    follows: await mockGetUserFollowStatus(...args),
+    detail: "mocked",
+  }),
   sendDirectMessageWithButton: mockSendDirectMessageWithButton,
   sendDirectMessage: mockSendDirectMessage,
   sendDirectMessageWithLinkButton: mockSendDirectMessageWithLinkButton,

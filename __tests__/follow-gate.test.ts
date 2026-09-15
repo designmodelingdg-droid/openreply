@@ -8,6 +8,7 @@ const { mockPrisma, mockHeaders, mockRedirect, mockFollowStatus } = vi.hoisted(
         update: vi.fn(),
         upsert: vi.fn(),
       },
+      operationalEvent: { create: vi.fn() },
     },
     mockHeaders: vi.fn(),
     mockRedirect: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock("@/lib/instagram/provider", () => ({
     provider: "META",
     accessToken: "token",
   }),
-  getUserFollowStatus: mockFollowStatus,
+  getUserFollowStatusDetailed: mockFollowStatus,
   hasInstagramCredentials: () => true,
 }));
 
@@ -82,6 +83,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.NEXTAUTH_URL = "https://openreply.example";
   mockPrisma.followGate.update.mockResolvedValue({});
+  mockPrisma.operationalEvent.create.mockResolvedValue({});
 });
 
 describe("follow gate links", () => {
@@ -129,7 +131,7 @@ describe("follow gate page", () => {
 
   it("blocks a non-follower with a follow button and a re-check button", async () => {
     mockPrisma.followGate.findUnique.mockResolvedValue(gateRow());
-    mockFollowStatus.mockResolvedValue(false);
+    mockFollowStatus.mockResolvedValue({ follows: false, detail: "ok: false" });
 
     const result = await render(INSTAGRAM_IN_APP_BROWSER);
 
@@ -147,7 +149,7 @@ describe("follow gate page", () => {
 
   it("sends a follower straight to the tracked link", async () => {
     mockPrisma.followGate.findUnique.mockResolvedValue(gateRow());
-    mockFollowStatus.mockResolvedValue(true);
+    mockFollowStatus.mockResolvedValue({ follows: true, detail: "ok: true" });
 
     await render(INSTAGRAM_IN_APP_BROWSER);
 
@@ -159,16 +161,41 @@ describe("follow gate page", () => {
     );
   });
 
-  // Meta not answering must not trap a real follower.
-  it("lets someone through when Instagram will not say", async () => {
+  // Meta not answering must not trap a real follower — but an unverified pass
+  // has to leave a trail, or a gate that never verifies anyone is invisible.
+  it("lets someone through when Instagram will not say, and says so", async () => {
     mockPrisma.followGate.findUnique.mockResolvedValue(gateRow());
-    mockFollowStatus.mockResolvedValue(null);
+    mockFollowStatus.mockResolvedValue({
+      follows: null,
+      detail: "HTTP 400: Unsupported get request",
+    });
 
     await render(INSTAGRAM_IN_APP_BROWSER);
 
     expect(mockRedirect).toHaveBeenCalledWith(
       "https://openreply.example/r/abc123"
     );
+
+    const saved = mockPrisma.followGate.update.mock.calls[0][0].data;
+    expect(saved.lastFollows).toBeNull();
+    expect(saved.lastDetail).toBe("HTTP 400: Unsupported get request");
+
+    const event = mockPrisma.operationalEvent.create.mock.calls[0][0].data;
+    expect(event.level).toBe("WARNING");
+    expect(event.message).toContain("Unsupported get request");
+    expect(event.payload.igsid).toBe("17841400000000000");
+  });
+
+  it("records a verified answer without raising an alert", async () => {
+    mockPrisma.followGate.findUnique.mockResolvedValue(gateRow());
+    mockFollowStatus.mockResolvedValue({ follows: false, detail: "ok: false" });
+
+    await render(INSTAGRAM_IN_APP_BROWSER);
+
+    expect(mockPrisma.followGate.update.mock.calls[0][0].data.lastFollows).toBe(
+      false
+    );
+    expect(mockPrisma.operationalEvent.create).not.toHaveBeenCalled();
   });
 
   it("offers a button per resource when a campaign has more than one", async () => {
@@ -180,7 +207,7 @@ describe("follow gate page", () => {
         ],
       })
     );
-    mockFollowStatus.mockResolvedValue(true);
+    mockFollowStatus.mockResolvedValue({ follows: true, detail: "ok: true" });
 
     const result = await render(INSTAGRAM_IN_APP_BROWSER);
 

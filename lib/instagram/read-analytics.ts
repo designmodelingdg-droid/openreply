@@ -9,16 +9,35 @@ export async function getUserFollowStatus({
   context: InstagramContext;
   recipientId: string;
 }): Promise<boolean | null> {
+  return (await getUserFollowStatusDetailed({ context, recipientId })).follows;
+}
+
+/**
+ * The follow check plus the provider's own explanation, for callers that fail
+ * open on an unverifiable answer and need to be able to say why afterwards.
+ */
+export async function getUserFollowStatusDetailed({
+  context,
+  recipientId,
+}: {
+  context: InstagramContext;
+  recipientId: string;
+}): Promise<{ follows: boolean | null; detail: string }> {
   if (context.provider === "META")
-    return meta.getUserFollowStatus(context.accessToken, recipientId);
+    return meta.getUserFollowStatusDetailed(context.accessToken, recipientId);
   try {
     const result = await zernioRequest<{ isFollower: boolean | null }>({
       apiKey: context.apiKey,
       path: `/accounts/${encodeURIComponent(context.accountId)}/follow-status/${encodeURIComponent(recipientId)}?refresh=true`,
     });
-    return typeof result.isFollower === "boolean" ? result.isFollower : null;
-  } catch {
-    return null;
+    if (typeof result.isFollower === "boolean")
+      return { follows: result.isFollower, detail: `ok: ${result.isFollower}` };
+    return { follows: null, detail: "zernio returned no isFollower" };
+  } catch (error) {
+    return {
+      follows: null,
+      detail: `zernio request failed: ${error instanceof Error ? error.message : "unknown"}`,
+    };
   }
 }
 

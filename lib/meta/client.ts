@@ -265,6 +265,22 @@ export async function getUserFollowStatus(
   accessToken: string,
   recipientId: string
 ): Promise<boolean | null> {
+  return (await getUserFollowStatusDetailed(accessToken, recipientId)).follows;
+}
+
+/**
+ * The same check, plus why it came out the way it did.
+ *
+ * A bare `null` is indistinguishable between "Meta refused the request",
+ * "Meta does not know this user" and "the field was simply absent" — and every
+ * caller that fails open on `null` then lets someone through for a reason
+ * nobody can see afterwards. `detail` carries Meta's own words so the decision
+ * can be audited.
+ */
+export async function getUserFollowStatusDetailed(
+  accessToken: string,
+  recipientId: string
+): Promise<{ follows: boolean | null; detail: string }> {
   const url = new URL(`${instagramGraphBase()}/${recipientId}`);
   url.searchParams.set("fields", "is_user_follow_business");
 
@@ -273,13 +289,38 @@ export async function getUserFollowStatus(
       method: "GET",
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (!response.ok) return null;
-    const data = await response.json();
-    return typeof data?.is_user_follow_business === "boolean"
-      ? data.is_user_follow_business
-      : null;
-  } catch {
-    return null;
+
+    const body = await response.text();
+    if (!response.ok) {
+      return {
+        follows: null,
+        // Meta's error body names the cause: a bad id reads differently from a
+        // missing permission, and the two need opposite fixes.
+        detail: `HTTP ${response.status}: ${body.slice(0, 300)}`,
+      };
+    }
+
+    let data: unknown;
+    try {
+      data = JSON.parse(body);
+    } catch {
+      return { follows: null, detail: `unparseable response: ${body.slice(0, 200)}` };
+    }
+
+    const value = (data as { is_user_follow_business?: unknown })
+      ?.is_user_follow_business;
+    if (typeof value === "boolean") {
+      return { follows: value, detail: `ok: ${value}` };
+    }
+    return {
+      follows: null,
+      detail: `field absent, Meta returned: ${body.slice(0, 300)}`,
+    };
+  } catch (error) {
+    return {
+      follows: null,
+      detail: `request failed: ${error instanceof Error ? error.message : "unknown"}`,
+    };
   }
 }
 

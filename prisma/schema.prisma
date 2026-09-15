@@ -446,6 +446,11 @@ model FollowGate {
   /// has — a gate opened over and over is a follow that never happens.
   lastCheckedAt DateTime?
   checkCount    Int       @default(0)
+  /// What the last check concluded, and what the provider said to make it
+  /// conclude that. A gate that lets someone through on an unverifiable answer
+  /// has to be able to explain itself afterwards.
+  lastFollows   Boolean?
+  lastDetail    String?
   /// First time the check came back as following. Kept so a returning visitor
   /// is not re-verified after they have already been let through.
   passedAt      DateTime?

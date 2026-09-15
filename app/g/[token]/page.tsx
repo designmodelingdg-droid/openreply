@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/client";
 import {
   createInstagramContext,
-  getUserFollowStatus,
+  getUserFollowStatusDetailed,
   hasInstagramCredentials,
 } from "@/lib/instagram/provider";
 import { buildTrackedUrl } from "@/lib/tracking/message";
@@ -114,16 +114,20 @@ export default async function FollowGatePage({
   }
 
   let follows: boolean | null = null;
+  let detail = "no usable credentials for this account";
   if (hasInstagramCredentials(account)) {
     try {
       const context = await createInstagramContext(account);
-      follows = await getUserFollowStatus({
+      const result = await getUserFollowStatusDetailed({
         context,
         recipientId: gate.igsid,
       });
-    } catch {
+      follows = result.follows;
+      detail = result.detail;
+    } catch (error) {
       // An account whose token we cannot use is our problem, not theirs.
       follows = null;
+      detail = `context failed: ${error instanceof Error ? error.message : "unknown"}`;
     }
   }
 
@@ -132,9 +136,34 @@ export default async function FollowGatePage({
     data: {
       lastCheckedAt: new Date(),
       checkCount: { increment: 1 },
+      lastFollows: follows,
+      lastDetail: detail.slice(0, 500),
       ...(follows === false ? {} : { passedAt: new Date() }),
     },
   });
+
+  // Letting an unverified visitor through is a deliberate choice, but a silent
+  // one is indistinguishable from a broken gate: it looks exactly like the
+  // check saying "yes". Record it where Diagnostics already looks, with the
+  // igsid we asked about, so a gate that never verifies anyone is visible
+  // instead of just permissive.
+  if (follows === null) {
+    await prisma.operationalEvent
+      .create({
+        data: {
+          workspaceId: account.workspaceId,
+          source: "SYSTEM",
+          level: "WARNING",
+          message: `Follow gate could not verify a visitor and let them through: ${detail.slice(0, 200)}`,
+          payload: {
+            automationId: automation.id,
+            igsid: gate.igsid,
+            detail: detail.slice(0, 500),
+          },
+        },
+      })
+      .catch(() => {});
+  }
 
   if (follows === false) {
     const profileUrl = `https://www.instagram.com/${encodeURIComponent(account.username)}/`;
