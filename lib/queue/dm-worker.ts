@@ -14,6 +14,10 @@ import {
 } from "./client";
 import { prisma } from "@/lib/db/client";
 import {
+  getFollowHandoffUrl,
+  sendFollowHandoff,
+} from "@/lib/handoff/follow-handoff";
+import {
   MetaApiError,
   RateLimitError,
   TokenExpiredError,
@@ -82,6 +86,26 @@ function isTemplateRejection(error: unknown): boolean {
   }
   const message = error instanceof Error ? error.message : "";
   return !NON_TEMPLATE_REJECTIONS.some((pattern) => pattern.test(message));
+}
+
+/**
+ * Meta's generic "An unknown error has occurred" (code 1) on a send is not a
+ * confirmed rejection. The message frequently arrives anyway: campaign
+ * "TUTORIAL REVIT CHATGPT" produced three identical DMs to the same commenter
+ * (22:07, 22:12, 22:17 — the BACKOFF_DELAYS ladder) because every retry
+ * delivered a copy while reporting failure.
+ *
+ * Treating it as unconfirmed rather than failed stops the retry, and the
+ * `dmDeliveryUnconfirmed` flag also tells the comment reconciler the comment
+ * was handled, so the next sweep does not send a fourth copy. One possibly
+ * lost DM is a far cheaper mistake than three delivered ones.
+ *
+ * Scoped to code 1 on purpose. Every other Meta failure that matters carries a
+ * different code (190 expired, 368/4/17 rate limit, 10/100/200 permission) and
+ * its own error subclass, so matching on the code alone cannot catch them.
+ */
+function isUnconfirmedMetaSend(error: unknown): boolean {
+  return error instanceof MetaApiError && error.code === 1;
 }
 
 type WorkerTrackedLink = {
@@ -730,9 +754,20 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           status: "FAILED",
           attempts: job.attemptsMade + 1,
           errorMessage: formatError(error),
-          dmDeliveryUnconfirmed: error instanceof ZernioDeliveryUnconfirmedError,
+          dmDeliveryUnconfirmed:
+            error instanceof ZernioDeliveryUnconfirmedError ||
+            isUnconfirmedMetaSend(error),
         },
       });
+      // Swallowing the error is what stops the retry — and the retry is what
+      // was delivering duplicate DMs. The log row keeps the reason.
+      if (isUnconfirmedMetaSend(error)) {
+        console.log(
+          "[DM Worker] Meta send unconfirmed, not retrying:",
+          formatError(error)
+        );
+        continue;
+      }
       throw error;
     }
   }
@@ -877,6 +912,47 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
       context: accessToken,
       recipientId: userId,
     });
+
+    // When another app owns the thread, everything after the first DM is
+    // rejected by Meta (100/2534037). Hand the verified follow status to the
+    // owner instead of trying to send, and stop here either way — a failed
+    // handoff still must not fall through to a send that cannot succeed.
+    if (isFollowCheck && getFollowHandoffUrl()) {
+      const resourceText = renderMessageWithTracking({
+        message: automation.dmMessage,
+        commenterName,
+        trackedLinks: automation.trackedLinks,
+      });
+      const repromptText = renderMessageWithoutLink({
+        message:
+          automation.followRepromptMessage ||
+          automation.followPromptMessage ||
+          "Veo que aun no me sigues. Sigueme y toca el boton de nuevo y te lo envio.",
+        commenterName,
+      });
+      const result = await sendFollowHandoff({
+        event: "follow_check",
+        igsid: userId,
+        ig_username: commenterName,
+        follows,
+        campaign_id: automation.id,
+        campaign_name: automation.name ?? null,
+        link: automation.trackedLinks[0]
+          ? buildTrackedUrl(automation.trackedLinks[0].slug)
+          : null,
+        messages: {
+          reprompt: repromptText,
+          resource: resourceText || "",
+          open_question: automation.postDeliveryQuestion?.trim() || null,
+        },
+        sent_at: Math.floor(Date.now() / 1000),
+      });
+      console.log(
+        `[DM Worker] Follow handoff for ${commenterName ?? userId} (follows=${follows}): ${result.ok ? "ok" : `failed — ${result.detail}`}`,
+      );
+      return;
+    }
+
     if (follows === false) {
       if (fallback) return;
       const promptText = renderMessageWithoutLink({

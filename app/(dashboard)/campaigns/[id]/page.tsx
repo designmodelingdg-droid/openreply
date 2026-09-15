@@ -44,6 +44,7 @@ interface Campaign {
     destinationUrl: string;
     label?: string | null;
     trackedUrl?: string;
+    _count?: { clicks: number };
   }[];
   analytics: {
     sent: number;
@@ -271,7 +272,11 @@ export default function CampaignDetailPage() {
                     </p>
                   </div>
                   <p className="text-xs text-muted">
-                    {link.label ? `${link.label} · ` : ""}redirects to{" "}
+                    {link.label ? `${link.label} · ` : ""}
+                    {link._count
+                      ? `${link._count.clicks} ${link._count.clicks === 1 ? "click" : "clicks"} · `
+                      : ""}
+                    redirects to{" "}
                     <span className="break-all">{link.destinationUrl}</span>
                   </p>
                 </div>

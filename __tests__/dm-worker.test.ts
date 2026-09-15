@@ -501,6 +501,54 @@ describe("DM Worker — Full Pipeline", () => {
     });
   });
 
+  // Regression: Meta answering code 1 on a send does not mean the DM was
+  // rejected — it is frequently delivered anyway. Re-throwing made BullMQ
+  // retry on the 5/15/45-minute ladder and each retry delivered another copy,
+  // which is how one commenter received the same DM three times.
+  it("marks a Meta code 1 send as unconfirmed and does not re-throw", async () => {
+    const { MetaApiError } = await import("@/lib/meta/client");
+    mockSendPrivateReply.mockRejectedValue(
+      new MetaApiError(
+        1,
+        undefined,
+        "trace_abc",
+        "An unknown error has occurred. (/v25.0/ig_456/messages)"
+      )
+    );
+
+    const processor = getProcessor();
+
+    await expect(processor(createMockJob())).resolves.toBeUndefined();
+    expect(mockPrisma.dmLog.update).toHaveBeenCalledWith({
+      where: {
+        automationId_commentId: {
+          automationId: "auto_789",
+          commentId: "comment_555",
+        },
+      },
+      data: expect.objectContaining({
+        status: "FAILED",
+        dmDeliveryUnconfirmed: true,
+      }),
+    });
+  });
+
+  it("still re-throws a Meta error that is a real rejection", async () => {
+    const { MetaApiError } = await import("@/lib/meta/client");
+    mockSendPrivateReply.mockRejectedValue(
+      new MetaApiError(613, undefined, undefined, "Calls to this api have exceeded the rate limit")
+    );
+
+    const processor = getProcessor();
+
+    await expect(processor(createMockJob())).rejects.toThrow();
+    expect(mockPrisma.dmLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ dmDeliveryUnconfirmed: false }),
+      })
+    );
+  });
+
   it("should handle missing access token", async () => {
     mockPrisma.automation.findMany.mockResolvedValue([
       {

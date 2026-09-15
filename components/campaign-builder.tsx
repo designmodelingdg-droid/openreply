@@ -45,6 +45,8 @@ interface LoadedCampaign {
   requireFollow: boolean;
   followPromptMessage: string | null;
   followPromptButtonLabel: string | null;
+  followRepromptMessage: string | null;
+  postDeliveryQuestion: string | null;
   followUpEnabled: boolean;
   followUpMessage: string | null;
   followUpDelayMinutes: number | null;
@@ -177,6 +179,8 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
   const [followPromptMessage, setFollowPromptMessage] = useState("");
   const [followPromptButtonLabel, setFollowPromptButtonLabel] =
     useState("i'm following");
+  const [followRepromptMessage, setFollowRepromptMessage] = useState("");
+  const [postDeliveryQuestion, setPostDeliveryQuestion] = useState("");
   const [followUpEnabled, setFollowUpEnabled] = useState(false);
   const [followUpMessage, setFollowUpMessage] = useState("");
   const [followUpDelayMinutes, setFollowUpDelayMinutes] = useState(0);
@@ -285,6 +289,8 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         setFollowPromptButtonLabel(
           c.followPromptButtonLabel ?? "i'm following"
         );
+        setFollowRepromptMessage(c.followRepromptMessage ?? "");
+        setPostDeliveryQuestion(c.postDeliveryQuestion ?? "");
         setFollowUpEnabled(c.followUpEnabled ?? false);
         setFollowUpMessage(c.followUpMessage ?? "");
         setFollowUpDelayMinutes(c.followUpDelayMinutes ?? 0);
@@ -424,6 +430,8 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       followPromptButtonLabel: requireFollow
         ? followPromptButtonLabel.trim() || "i'm following"
         : "",
+      followRepromptMessage: requireFollow ? followRepromptMessage.trim() : "",
+      postDeliveryQuestion: requireFollow ? postDeliveryQuestion.trim() : "",
       followUpEnabled,
       followUpMessage: followUpEnabled ? followUpMessage.trim() : "",
       followUpDelayMinutes: followUpEnabled ? followUpDelayMinutes : 0,
@@ -854,6 +862,30 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
                   maxLength={20}
                 />
+                <textarea
+                  value={followRepromptMessage}
+                  onChange={(e) => setFollowRepromptMessage(e.target.value)}
+                  placeholder="Veo que aún no me sigues 👀 Sígueme y toca el botón otra vez y te lo envío al instante."
+                  rows={2}
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none resize-none"
+                  maxLength={1000}
+                />
+                <p className="text-xs text-muted">
+                  Shown when they tap the button but Instagram says they still
+                  don&apos;t follow. Leave empty to repeat the message above.
+                </p>
+                <textarea
+                  value={postDeliveryQuestion}
+                  onChange={(e) => setPostDeliveryQuestion(e.target.value)}
+                  placeholder="¿Quieres usar la IA para agilizar los proyectos que ya haces, o para dar el salto a un cargo como BIM Manager? 🚀"
+                  rows={2}
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none resize-none"
+                  maxLength={1000}
+                />
+                <p className="text-xs text-muted">
+                  Optional question sent after the link, to open a conversation
+                  your inbox tool can pick up. Only used on the handoff path.
+                </p>
                 <p className="text-xs text-muted">
                   We send the link only after they tap the button and Instagram
                   confirms the follow. If it can&apos;t be verified, we send it

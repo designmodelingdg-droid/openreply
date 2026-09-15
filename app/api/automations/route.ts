@@ -35,6 +35,8 @@ const createAutomationSchema = z
     requireFollow: z.boolean().optional().default(false),
     followPromptMessage: z.string().max(1000).optional().nullable(),
     followPromptButtonLabel: z.string().max(20).optional().nullable(),
+    followRepromptMessage: z.string().max(1000).optional().nullable(),
+    postDeliveryQuestion: z.string().max(1000).optional().nullable(),
     followUpEnabled: z.boolean().optional().default(false),
     followUpMessage: z.string().max(1000).optional().nullable(),
     // Minutes to wait before the follow-up. Capped at 24h so it stays inside
@@ -98,6 +100,8 @@ const updateAutomationSchema = z.object({
   requireFollow: z.boolean().optional(),
   followPromptMessage: z.string().max(1000).optional().nullable(),
   followPromptButtonLabel: z.string().max(20).optional().nullable(),
+  followRepromptMessage: z.string().max(1000).optional().nullable(),
+  postDeliveryQuestion: z.string().max(1000).optional().nullable(),
   followUpEnabled: z.boolean().optional(),
   followUpMessage: z.string().max(1000).optional().nullable(),
   followUpDelayMinutes: z.number().int().min(0).max(1440).optional(),
@@ -411,6 +415,12 @@ export async function POST(request: NextRequest) {
       followPromptButtonLabel: parsed.data.requireFollow
         ? parsed.data.followPromptButtonLabel || null
         : null,
+      followRepromptMessage: parsed.data.requireFollow
+        ? parsed.data.followRepromptMessage || null
+        : null,
+      postDeliveryQuestion: parsed.data.requireFollow
+        ? parsed.data.postDeliveryQuestion || null
+        : null,
       followUpEnabled: parsed.data.followUpEnabled,
       followUpMessage: parsed.data.followUpEnabled
         ? parsed.data.followUpMessage || null
@@ -513,6 +523,8 @@ export async function PATCH(request: NextRequest) {
   if (automationData.requireFollow === false) {
     automationData.followPromptMessage = null;
     automationData.followPromptButtonLabel = null;
+    automationData.followRepromptMessage = null;
+    automationData.postDeliveryQuestion = null;
   }
   if (automationData.followUpEnabled === false) {
     automationData.followUpMessage = null;

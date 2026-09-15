@@ -193,6 +193,13 @@ model Automation {
   requireFollow           Boolean @default(false)
   followPromptMessage     String?
   followPromptButtonLabel String?
+  /// Shown when someone taps the follow button but Instagram reports they
+  /// still do not follow. Without it the first prompt is repeated verbatim,
+  /// which reads like the button did nothing.
+  followRepromptMessage   String?
+  /// Sent after the resource, to open a conversation the sales bot can pick
+  /// up. Only used on the handoff path, where another app owns the thread.
+  postDeliveryQuestion    String?
   followUpEnabled Boolean @default(false)
   followUpMessage String?
   // Minutes to wait after the link is delivered before sending the follow-up.
