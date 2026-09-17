@@ -334,25 +334,23 @@ export interface LinkButton {
 }
 
 /**
- * A tappable chip that, unlike a button, posts its title into the thread as a
- * message FROM the person who tapped it.
+ * A button that carries a payload instead of a URL.
  *
- * That difference is the whole point: a button tap is a postback or a browser
- * navigation, invisible to whoever else is watching the conversation. A quick
- * reply is an inbound message, so the app that owns the thread sees it and a
- * bot can pick the conversation up from there. Instagram caps the title at 20
- * characters and the list at 13.
+ * Tapping one echoes its title into the thread as a message from the person
+ * who tapped it — which is the whole point here. A web_url button navigates
+ * away silently, so whoever else is watching the conversation never learns the
+ * person answered. This leaves a visible inbound message behind.
  */
-export interface QuickReply {
+export interface PostbackButton {
   title: string;
   payload: string;
 }
 
-function toQuickReplies(quickReplies: QuickReply[]) {
-  return quickReplies.slice(0, 13).map((reply) => ({
-    content_type: "text",
-    title: reply.title.slice(0, 20),
-    payload: reply.payload.slice(0, 1000),
+function toPostbackButtons(buttons: PostbackButton[]) {
+  return buttons.slice(0, 3).map((b) => ({
+    type: "postback",
+    title: b.title.slice(0, 20),
+    payload: b.payload.slice(0, 1000),
   }));
 }
 
@@ -372,8 +370,7 @@ export async function sendPrivateReplyWithLinkButton(
   instagramAccountId: string,
   commentId: string,
   text: string,
-  buttons: LinkButton[],
-  quickReplies?: QuickReply[]
+  buttons: LinkButton[]
 ): Promise<{ recipient_id: string; message_id: string }> {
   const response = await fetch(
     `${instagramGraphBase()}/${instagramAccountId}/messages`,
@@ -394,9 +391,48 @@ export async function sendPrivateReplyWithLinkButton(
               buttons: toWebUrlButtons(buttons),
             },
           },
-          ...(quickReplies?.length
-            ? { quick_replies: toQuickReplies(quickReplies) }
-            : {}),
+        },
+      }),
+    }
+  );
+
+  return handleResponse(response);
+}
+
+/**
+ * Send a private reply whose buttons are answers, not links.
+ *
+ * The resource goes inline in the text, which frees all three button slots —
+ * Instagram allows no more than three — for the question's answers. Tapping
+ * one posts it into the thread as the commenter's own message, so the app that
+ * owns the conversation sees someone has answered and can take it from there.
+ */
+export async function sendPrivateReplyWithPostbackButtons(
+  accessToken: string,
+  instagramAccountId: string,
+  commentId: string,
+  text: string,
+  buttons: PostbackButton[]
+): Promise<{ recipient_id: string; message_id: string }> {
+  const response = await fetch(
+    `${instagramGraphBase()}/${instagramAccountId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        recipient: { comment_id: commentId },
+        message: {
+          attachment: {
+            type: "template",
+            payload: {
+              template_type: "button",
+              text: text.slice(0, 640),
+              buttons: toPostbackButtons(buttons),
+            },
+          },
         },
       }),
     }

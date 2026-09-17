@@ -4,6 +4,7 @@ const {
   mockPrisma,
   mockSendPrivateReply,
   mockSendPrivateReplyWithLinkButton,
+  mockSendPrivateReplyWithPostbackButtons,
   mockSendPrivateReplyWithButton,
   mockGetUserFollowStatus,
   mockSendDirectMessageWithButton,
@@ -42,6 +43,7 @@ const {
   },
   mockSendPrivateReply: vi.fn(),
   mockSendPrivateReplyWithLinkButton: vi.fn(),
+  mockSendPrivateReplyWithPostbackButtons: vi.fn(),
   mockSendPrivateReplyWithButton: vi.fn(),
   mockGetUserFollowStatus: vi.fn(),
   mockSendDirectMessageWithButton: vi.fn(),
@@ -62,6 +64,7 @@ vi.mock("@/lib/db/client", () => ({
 vi.mock("@/lib/meta/client", () => ({
   sendPrivateReply: mockSendPrivateReply,
   sendPrivateReplyWithLinkButton: mockSendPrivateReplyWithLinkButton,
+  sendPrivateReplyWithPostbackButtons: mockSendPrivateReplyWithPostbackButtons,
   sendPrivateReplyWithButton: mockSendPrivateReplyWithButton,
   getUserFollowStatus: mockGetUserFollowStatus,
   // The provider layer calls the detailed variant and reads .follows off it;
@@ -638,8 +641,7 @@ describe("DM Worker — Full Pipeline", () => {
       [
         { title: "Get offer", url: "http://localhost:3000/r/abc123" },
         { title: "Book a call", url: "http://localhost:3000/r/def456" },
-      ],
-      undefined
+      ]
     );
   });
 
@@ -710,8 +712,7 @@ describe("DM Worker — Full Pipeline", () => {
       "ig_456",
       "comment_555",
       "Follow me first commenter_user, then tap 👇",
-      [{ title: "Ya te sigo", url: "http://localhost:3000/g/gate_tok" }],
-      undefined
+      [{ title: "Ya te sigo", url: "http://localhost:3000/g/gate_tok" }]
     );
     // The resource link is never in that message — it is what the gate hands
     // over once the follow checks out.
@@ -728,7 +729,7 @@ describe("DM Worker — Full Pipeline", () => {
         ...mockAutomation,
         requireFollow: true,
         followGateWeb: true,
-        dmMessage: "¡Listo {username}! Aquí tienes tu guía.",
+        dmMessage: "¡Listo {username}! Aquí tienes tu guía: {link}",
         linkButtonLabel: "Descargar la guía",
         postDeliveryQuestion: "¿Para agilizar proyectos o para BIM Manager?",
         postDeliveryAnswers: ["Agilizar proyectos", "Saltar a BIM Manager"],
@@ -746,12 +747,14 @@ describe("DM Worker — Full Pipeline", () => {
     await processor(createMockJob());
 
     expect(mockPrisma.followGate.upsert).not.toHaveBeenCalled();
-    expect(mockSendPrivateReplyWithLinkButton).toHaveBeenCalledWith(
+    // The link rides inline in the text so all three button slots stay free
+    // for the answers, and each answer is a postback — the only button kind
+    // Instagram echoes into the thread as the commenter's own message.
+    expect(mockSendPrivateReplyWithPostbackButtons).toHaveBeenCalledWith(
       "decrypted_token",
       "ig_456",
       "comment_555",
-      "¡Listo commenter_user! Aquí tienes tu guía.\n\n¿Para agilizar proyectos o para BIM Manager?",
-      [{ title: "Descargar la guía", url: "http://localhost:3000/r/abc123" }],
+      "¡Listo commenter_user! Aquí tienes tu guía: http://localhost:3000/r/abc123\n\n¿Para agilizar proyectos o para BIM Manager?",
       [
         { title: "Agilizar proyectos", payload: "answer:auto_789:Agilizar proyectos" },
         { title: "Saltar a BIM Manager", payload: "answer:auto_789:Saltar a BIM Manager" },
@@ -788,8 +791,7 @@ describe("DM Worker — Full Pipeline", () => {
       "ig_456",
       "comment_555",
       expect.any(String),
-      [{ title: "Ya te sigo", url: "http://localhost:3000/g/gate_tok" }],
-      undefined
+      [{ title: "Ya te sigo", url: "http://localhost:3000/g/gate_tok" }]
     );
   });
 
@@ -823,8 +825,7 @@ describe("DM Worker — Full Pipeline", () => {
       "ig_456",
       "comment_555",
       "Hey commenter_user! Here is the offer:",
-      [{ title: "Get offer", url: "http://localhost:3000/r/abc123" }],
-      undefined
+      [{ title: "Get offer", url: "http://localhost:3000/r/abc123" }]
     );
   });
 

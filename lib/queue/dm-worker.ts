@@ -30,6 +30,7 @@ import {
   sendPrivateReply,
   sendPrivateReplyWithButton,
   sendPrivateReplyWithLinkButton,
+  sendPrivateReplyWithPostbackButtons,
 } from "@/lib/instagram/provider";
 import {
   createInstagramContext,
@@ -651,20 +652,20 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
 
       if (followerShortcut) {
         const question = automation.postDeliveryQuestion?.trim();
-        const body = renderMessageWithoutLink({
+        // The link goes inline so all three button slots — Instagram allows no
+        // more — belong to the answers. A link button would spend one of them
+        // on something the text already says.
+        const body = renderMessageWithTracking({
           message: automation.dmMessage,
           commenterName,
+          trackedLinks: automation.trackedLinks,
         });
-        await sendPrivateReplyWithLinkButton({
+        await sendPrivateReplyWithPostbackButtons({
           context: accessToken,
           instagramAccountId: automation.instagramAccount.instagramId,
           commentId: commentId,
           text: question ? `${body}\n\n${question}` : body,
-          buttons: buildLinkButtons(
-            automation.trackedLinks,
-            automation.linkButtonLabel
-          ),
-          quickReplies: answers.map((answer) => ({
+          buttons: answers.map((answer) => ({
             title: answer,
             payload: `answer:${automation.id}:${answer}`,
           })),

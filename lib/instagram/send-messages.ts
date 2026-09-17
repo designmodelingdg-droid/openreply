@@ -170,7 +170,6 @@ export async function sendPrivateReplyWithLinkButton({
   text,
   buttons,
   postId,
-  quickReplies,
 }: {
   context: InstagramContext;
   instagramAccountId: string;
@@ -178,7 +177,6 @@ export async function sendPrivateReplyWithLinkButton({
   text: string;
   buttons: meta.LinkButton[];
   postId?: string;
-  quickReplies?: meta.QuickReply[];
 }) {
   if (context.provider === "META")
     return meta.sendPrivateReplyWithLinkButton(
@@ -186,8 +184,7 @@ export async function sendPrivateReplyWithLinkButton({
       instagramAccountId,
       commentId,
       text,
-      buttons,
-      quickReplies
+      buttons
     );
   return sendZernioMessage({
     context,
@@ -196,6 +193,34 @@ export async function sendPrivateReplyWithLinkButton({
     text: text,
     buttons: linkButtons(buttons),
   });
+}
+
+export async function sendPrivateReplyWithPostbackButtons({
+  context,
+  instagramAccountId,
+  commentId,
+  text,
+  buttons,
+  postId,
+}: {
+  context: InstagramContext;
+  instagramAccountId: string;
+  commentId: string;
+  text: string;
+  buttons: meta.PostbackButton[];
+  postId?: string;
+}) {
+  if (context.provider === "META")
+    return meta.sendPrivateReplyWithPostbackButtons(
+      context.accessToken,
+      instagramAccountId,
+      commentId,
+      text,
+      buttons
+    );
+  // Zernio has no postback surface, so the answers cannot be tapped there. The
+  // text still carries the link, which is the part that must not be lost.
+  return sendZernioMessage({ context, commentId, postId, text });
 }
 
 export async function sendDirectMessage({
