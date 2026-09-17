@@ -951,11 +951,14 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                   )}
                 </div>
                 <p className="text-xs text-muted">
-                  Someone who already follows skips the gate: they get the
-                  resource right away, with this question and these answers as
-                  chips. Tapping one posts it as their own message, which is
-                  what wakes your inbox tool&apos;s bot. Max 20 characters each.
-                  Leave them empty and everyone goes through the gate instead.
+                  Someone who already follows skips the gate: they get one
+                  message with the resource as a button and these answers as
+                  buttons under the question. Tapping an answer posts it as
+                  their own message, which is what wakes your inbox tool&apos;s
+                  bot; tapping the resource opens it and stays quiet. Instagram
+                  allows three buttons in total, so with one link there is room
+                  for two answers. Max 20 characters each. Leave them empty and
+                  everyone goes through the gate instead.
                 </p>
                 <p className="text-xs text-muted">
                   We send the link only after they tap the button and Instagram

@@ -11,6 +11,7 @@ export type {
   FollowerCountPoint,
   LinkButton,
   PostbackButton,
+  TemplateButton,
 } from "@/lib/meta/client";
 export * from "./context";
 export * from "./send-messages";

@@ -4,7 +4,7 @@ const {
   mockPrisma,
   mockSendPrivateReply,
   mockSendPrivateReplyWithLinkButton,
-  mockSendPrivateReplyWithPostbackButtons,
+  mockSendPrivateReplyWithButtons,
   mockSendPrivateReplyWithButton,
   mockGetUserFollowStatus,
   mockSendDirectMessageWithButton,
@@ -43,7 +43,7 @@ const {
   },
   mockSendPrivateReply: vi.fn(),
   mockSendPrivateReplyWithLinkButton: vi.fn(),
-  mockSendPrivateReplyWithPostbackButtons: vi.fn(),
+  mockSendPrivateReplyWithButtons: vi.fn(),
   mockSendPrivateReplyWithButton: vi.fn(),
   mockGetUserFollowStatus: vi.fn(),
   mockSendDirectMessageWithButton: vi.fn(),
@@ -64,7 +64,7 @@ vi.mock("@/lib/db/client", () => ({
 vi.mock("@/lib/meta/client", () => ({
   sendPrivateReply: mockSendPrivateReply,
   sendPrivateReplyWithLinkButton: mockSendPrivateReplyWithLinkButton,
-  sendPrivateReplyWithPostbackButtons: mockSendPrivateReplyWithPostbackButtons,
+  sendPrivateReplyWithButtons: mockSendPrivateReplyWithButtons,
   sendPrivateReplyWithButton: mockSendPrivateReplyWithButton,
   getUserFollowStatus: mockGetUserFollowStatus,
   // The provider layer calls the detailed variant and reads .follows off it;
@@ -747,19 +747,55 @@ describe("DM Worker — Full Pipeline", () => {
     await processor(createMockJob());
 
     expect(mockPrisma.followGate.upsert).not.toHaveBeenCalled();
-    // The link rides inline in the text so all three button slots stay free
-    // for the answers, and each answer is a postback — the only button kind
-    // Instagram echoes into the thread as the commenter's own message.
-    expect(mockSendPrivateReplyWithPostbackButtons).toHaveBeenCalledWith(
+    // The resource is a link button — a URL in template text is not tappable —
+    // and it opens quietly. The answers are postbacks: Instagram echoes the
+    // tapped title into the thread as the commenter's own message, which is
+    // what wakes a bot in an inbox another app owns.
+    expect(mockSendPrivateReplyWithButtons).toHaveBeenCalledWith(
       "decrypted_token",
       "ig_456",
       "comment_555",
-      "¡Listo commenter_user! Aquí tienes tu guía: http://localhost:3000/r/abc123\n\n¿Para agilizar proyectos o para BIM Manager?",
+      "¡Listo commenter_user! Aquí tienes tu guía:\n\n¿Para agilizar proyectos o para BIM Manager?",
       [
-        { title: "Agilizar proyectos", payload: "answer:auto_789:Agilizar proyectos" },
-        { title: "Saltar a BIM Manager", payload: "answer:auto_789:Saltar a BIM Manager" },
+        { type: "web_url", title: "Descargar la guía", url: "http://localhost:3000/r/abc123" },
+        { type: "postback", title: "Agilizar proyectos", payload: "answer:auto_789:Agilizar proyectos" },
+        { type: "postback", title: "Saltar a BIM Manager", payload: "answer:auto_789:Saltar a BIM Manager" },
       ]
     );
+  });
+
+  // Three buttons is Instagram's cap and the link takes one, so a third answer
+  // has nowhere to go and is dropped rather than pushing the link out.
+  it("should keep the link button and drop answers past the third slot", async () => {
+    mockGetUserFollowStatus.mockResolvedValue(true);
+    mockPrisma.automation.findMany.mockResolvedValue([
+      {
+        ...mockAutomation,
+        requireFollow: true,
+        followGateWeb: true,
+        dmMessage: "Aquí tienes tu guía: {link}",
+        linkButtonLabel: "Descargar la guía",
+        postDeliveryQuestion: "¿Y tú?",
+        postDeliveryAnswers: ["Uno", "Dos", "Tres"],
+        trackedLinks: [
+          {
+            slug: "abc123",
+            label: "Primary campaign link",
+            destinationUrl: "https://example.com",
+          },
+        ],
+      },
+    ]);
+
+    const processor = getProcessor();
+    await processor(createMockJob());
+
+    const buttons = mockSendPrivateReplyWithButtons.mock.calls[0][4];
+    expect(buttons.map((b: { title: string }) => b.title)).toEqual([
+      "Descargar la guía",
+      "Uno",
+      "Dos",
+    ]);
   });
 
   // Without answers there is nothing to tap, so the gate stays in charge.

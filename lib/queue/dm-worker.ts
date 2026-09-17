@@ -30,7 +30,7 @@ import {
   sendPrivateReply,
   sendPrivateReplyWithButton,
   sendPrivateReplyWithLinkButton,
-  sendPrivateReplyWithPostbackButtons,
+  sendPrivateReplyWithButtons,
 } from "@/lib/instagram/provider";
 import {
   createInstagramContext,
@@ -635,16 +635,26 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     try {
       // Someone Instagram confirms already follows has nothing left to verify,
       // and the gate would only put a browser between them and the resource.
-      // They get it in this message instead — with the opening question as
-      // quick replies, so their tap lands in the thread as their own message
-      // and whoever owns the inbox can take the conversation from there.
+      // They get it in this message instead: the resource as a link button,
+      // the opening question as answer buttons. A link button opens the
+      // resource and nothing else happens in the thread; an answer button
+      // echoes its title into the thread as the commenter's own message, and
+      // that inbound message is what lets whoever owns the inbox take over.
+      //
+      // Instagram allows three buttons. The links take theirs first, since a
+      // URL in a template's text is not tappable; the answers get what is left.
+      const linkButtons = buildLinkButtons(
+        automation.trackedLinks,
+        automation.linkButtonLabel
+      );
       const answers = (automation.postDeliveryAnswers ?? [])
         .map((answer) => answer.trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        .slice(0, Math.max(0, 3 - linkButtons.length));
       const followerShortcut =
         webFollowGate &&
         answers.length > 0 &&
-        automation.trackedLinks.length > 0 &&
+        linkButtons.length > 0 &&
         (await getUserFollowStatus({
           context: accessToken,
           recipientId: commenterId,
@@ -652,23 +662,23 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
 
       if (followerShortcut) {
         const question = automation.postDeliveryQuestion?.trim();
-        // The link goes inline so all three button slots — Instagram allows no
-        // more — belong to the answers. A link button would spend one of them
-        // on something the text already says.
-        const body = renderMessageWithTracking({
+        const body = renderMessageWithoutLink({
           message: automation.dmMessage,
           commenterName,
-          trackedLinks: automation.trackedLinks,
         });
-        await sendPrivateReplyWithPostbackButtons({
+        await sendPrivateReplyWithButtons({
           context: accessToken,
           instagramAccountId: automation.instagramAccount.instagramId,
           commentId: commentId,
           text: question ? `${body}\n\n${question}` : body,
-          buttons: answers.map((answer) => ({
-            title: answer,
-            payload: `answer:${automation.id}:${answer}`,
-          })),
+          buttons: [
+            ...linkButtons.map((b) => ({ type: "web_url" as const, ...b })),
+            ...answers.map((answer) => ({
+              type: "postback" as const,
+              title: answer,
+              payload: `answer:${automation.id}:${answer}`,
+            })),
+          ],
           postId: mediaId,
         });
       } else if (webFollowGate) {

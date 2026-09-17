@@ -346,12 +346,24 @@ export interface PostbackButton {
   payload: string;
 }
 
-function toPostbackButtons(buttons: PostbackButton[]) {
-  return buttons.slice(0, 3).map((b) => ({
-    type: "postback",
-    title: b.title.slice(0, 20),
-    payload: b.payload.slice(0, 1000),
-  }));
+/**
+ * One slot in a button template: a link or an answer. Instagram allows three
+ * per message, of either kind, in any mix.
+ */
+export type TemplateButton =
+  | { type: "web_url"; title: string; url: string }
+  | { type: "postback"; title: string; payload: string };
+
+function toTemplateButtons(buttons: TemplateButton[]) {
+  return buttons.slice(0, 3).map((b) =>
+    b.type === "web_url"
+      ? { type: "web_url", url: b.url, title: b.title.slice(0, 20) }
+      : {
+          type: "postback",
+          title: b.title.slice(0, 20),
+          payload: b.payload.slice(0, 1000),
+        }
+  );
 }
 
 function toWebUrlButtons(buttons: LinkButton[]) {
@@ -400,19 +412,20 @@ export async function sendPrivateReplyWithLinkButton(
 }
 
 /**
- * Send a private reply whose buttons are answers, not links.
+ * Send a private reply with a mix of link and answer buttons.
  *
- * The resource goes inline in the text, which frees all three button slots —
- * Instagram allows no more than three — for the question's answers. Tapping
- * one posts it into the thread as the commenter's own message, so the app that
- * owns the conversation sees someone has answered and can take it from there.
+ * URLs inside a template's text are not tappable on Instagram, so a resource
+ * has to be a button to be reachable at all. That leaves two of the three
+ * slots for answers; tapping one posts it into the thread as the commenter's
+ * own message, so the app that owns the conversation sees someone answered
+ * and can take it from there.
  */
-export async function sendPrivateReplyWithPostbackButtons(
+export async function sendPrivateReplyWithButtons(
   accessToken: string,
   instagramAccountId: string,
   commentId: string,
   text: string,
-  buttons: PostbackButton[]
+  buttons: TemplateButton[]
 ): Promise<{ recipient_id: string; message_id: string }> {
   const response = await fetch(
     `${instagramGraphBase()}/${instagramAccountId}/messages`,
@@ -430,7 +443,7 @@ export async function sendPrivateReplyWithPostbackButtons(
             payload: {
               template_type: "button",
               text: text.slice(0, 640),
-              buttons: toPostbackButtons(buttons),
+              buttons: toTemplateButtons(buttons),
             },
           },
         },

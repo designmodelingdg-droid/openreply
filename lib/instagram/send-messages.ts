@@ -195,7 +195,7 @@ export async function sendPrivateReplyWithLinkButton({
   });
 }
 
-export async function sendPrivateReplyWithPostbackButtons({
+export async function sendPrivateReplyWithButtons({
   context,
   instagramAccountId,
   commentId,
@@ -207,20 +207,30 @@ export async function sendPrivateReplyWithPostbackButtons({
   instagramAccountId: string;
   commentId: string;
   text: string;
-  buttons: meta.PostbackButton[];
+  buttons: meta.TemplateButton[];
   postId?: string;
 }) {
   if (context.provider === "META")
-    return meta.sendPrivateReplyWithPostbackButtons(
+    return meta.sendPrivateReplyWithButtons(
       context.accessToken,
       instagramAccountId,
       commentId,
       text,
       buttons
     );
-  // Zernio has no postback surface, so the answers cannot be tapped there. The
-  // text still carries the link, which is the part that must not be lost.
-  return sendZernioMessage({ context, commentId, postId, text });
+  // Zernio has no postback surface: only the links survive there. The answers
+  // cannot be tapped, but the resource must not be lost.
+  return sendZernioMessage({
+    context,
+    commentId,
+    postId,
+    text,
+    buttons: linkButtons(
+      buttons.flatMap((b) =>
+        b.type === "web_url" ? [{ title: b.title, url: b.url }] : []
+      )
+    ),
+  });
 }
 
 export async function sendDirectMessage({
