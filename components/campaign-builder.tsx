@@ -1062,6 +1062,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
             }
             secondLinkButtonLabel={secondaryButtonLabel || "Open link"}
             requireFollow={requireFollow}
+            followGateWeb={followGateWeb}
             followPromptMessage={followPromptMessage}
             followPromptButtonLabel={followPromptButtonLabel || "i'm following"}
             followUpEnabled={followUpEnabled}

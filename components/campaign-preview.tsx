@@ -35,6 +35,7 @@ interface CampaignPreviewProps {
   hasSecondLink: boolean;
   secondLinkButtonLabel: string;
   requireFollow: boolean;
+  followGateWeb: boolean;
   followPromptMessage: string;
   followPromptButtonLabel: string;
   followUpEnabled: boolean;
@@ -316,6 +317,7 @@ function DmScreen({
   hasSecondLink,
   secondLinkButtonLabel,
   requireFollow,
+  followGateWeb,
   followPromptMessage,
   followPromptButtonLabel,
   followUpEnabled,
@@ -336,6 +338,7 @@ function DmScreen({
   hasSecondLink: boolean;
   secondLinkButtonLabel: string;
   requireFollow: boolean;
+  followGateWeb: boolean;
   followPromptMessage: string;
   followPromptButtonLabel: string;
   followUpEnabled: boolean;
@@ -344,6 +347,17 @@ function DmScreen({
   // Present on the keyword-trigger thread: the DM the user sends to start it.
   inboundMessage?: string;
 }) {
+  // With the web gate the button is a link, not a postback: the thread ends at
+  // that one message. A reveal DM drawn after it would promise a message
+  // Instagram never lets us send — the exact confusion the gate exists to end.
+  const webGateNote =
+    requireFollow && followGateWeb ? (
+      <p className="rounded-xl bg-zinc-800/60 px-3 py-2 text-center text-[11px] leading-relaxed text-zinc-400">
+        Tapping the button opens your verification page. The follow check, the
+        resource and the question all happen there — no second DM is sent.
+      </p>
+    ) : null;
+
   return (
     <div className="flex h-full flex-col text-white">
       <StatusBar />
@@ -397,14 +411,18 @@ function DmScreen({
                 </div>
               </div>
             </div>
-            <div className="flex justify-end">
-              <div className="rounded-2xl rounded-br-md bg-accent px-3 py-2 text-sm">
-                {followPromptButtonLabel || "i'm following"}
+            {!followGateWeb && (
+              <div className="flex justify-end">
+                <div className="rounded-2xl rounded-br-md bg-accent px-3 py-2 text-sm">
+                  {followPromptButtonLabel || "i'm following"}
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
-        {(() => {
+        {webGateNote}
+        {!webGateNote &&
+          (() => {
           const resolved = revealMessage.replace(/\{username\}/g, SAMPLE_USER);
           const hasToken = resolved.includes("{link}");
           const showCard = hasLink && hasToken;
@@ -440,7 +458,7 @@ function DmScreen({
             </div>
           );
         })()}
-        {followUpEnabled && (
+        {followUpEnabled && !followGateWeb && (
           <>
             {followUpDelayMinutes > 0 && (
               <p className="py-1 text-center text-[11px] text-zinc-500">
@@ -522,6 +540,7 @@ export default function CampaignPreview(props: CampaignPreviewProps) {
             hasSecondLink={props.hasSecondLink}
             secondLinkButtonLabel={props.secondLinkButtonLabel}
             requireFollow={props.requireFollow}
+            followGateWeb={props.followGateWeb}
             followPromptMessage={props.followPromptMessage}
             followPromptButtonLabel={props.followPromptButtonLabel}
             followUpEnabled={props.followUpEnabled}
@@ -544,6 +563,7 @@ export default function CampaignPreview(props: CampaignPreviewProps) {
             hasSecondLink={props.hasSecondLink}
             secondLinkButtonLabel={props.secondLinkButtonLabel}
             requireFollow={props.requireFollow}
+            followGateWeb={props.followGateWeb}
             followPromptMessage={props.followPromptMessage}
             followPromptButtonLabel={props.followPromptButtonLabel}
             followUpEnabled={props.followUpEnabled}

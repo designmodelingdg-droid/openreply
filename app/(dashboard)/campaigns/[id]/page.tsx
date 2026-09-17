@@ -29,6 +29,7 @@ interface Campaign {
   openingDmButtonLabel: string | null;
   linkButtonLabel: string | null;
   requireFollow: boolean;
+  followGateWeb: boolean;
   followPromptMessage: string | null;
   followPromptButtonLabel: string | null;
   followUpEnabled: boolean;
@@ -149,6 +150,7 @@ export default function CampaignDetailPage() {
       : campaign.publicReplyMessage
         ? [campaign.publicReplyMessage]
         : [];
+  const webGate = campaign.requireFollow && campaign.followGateWeb;
   const hasLink = Boolean(campaign.trackedLinks?.[0]?.destinationUrl);
   const hasSecondLink = Boolean(campaign.trackedLinks?.[1]?.destinationUrl);
 
@@ -237,7 +239,13 @@ export default function CampaignDetailPage() {
         )}
 
         {campaign.requireFollow && (
-          <Summary title="They must follow first">
+          <Summary
+            title={
+              campaign.followGateWeb
+                ? "They must follow first, verified on a web page"
+                : "They must follow first"
+            }
+          >
             <FieldBox>
               {campaign.followPromptMessage ||
                 "quick favor before i send your link. i don't make any money from this, it's free. if you want to support me, just don't unfollow after, and star the repo on github if it helps you. tap the button once you're following and i'll send it over"}
@@ -248,7 +256,19 @@ export default function CampaignDetailPage() {
           </Summary>
         )}
 
-        <Summary title="And then, they will get a DM">
+        <Summary
+          title={
+            webGate
+              ? "And then, the page hands it over"
+              : "And then, they will get a DM"
+          }
+        >
+          {webGate && (
+            <p className="text-xs text-muted">
+              Not a second DM: the button opens the verification page, and this
+              is what it shows once Instagram confirms the follow.
+            </p>
+          )}
           <FieldBox>{campaign.dmMessage}</FieldBox>
           {hasLink && (
             <FieldBox>{campaign.linkButtonLabel || "Open link"}</FieldBox>
@@ -369,6 +389,7 @@ export default function CampaignDetailPage() {
               campaign.trackedLinks?.[1]?.label ?? "Open link"
             }
             requireFollow={campaign.requireFollow}
+            followGateWeb={campaign.followGateWeb}
             followPromptMessage={campaign.followPromptMessage ?? ""}
             followPromptButtonLabel={
               campaign.followPromptButtonLabel ?? "i'm following"
