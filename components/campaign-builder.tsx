@@ -48,6 +48,7 @@ interface LoadedCampaign {
   followPromptButtonLabel: string | null;
   followRepromptMessage: string | null;
   postDeliveryQuestion: string | null;
+  postDeliveryAnswers: string[] | null;
   followUpEnabled: boolean;
   followUpMessage: string | null;
   followUpDelayMinutes: number | null;
@@ -183,6 +184,10 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
     useState("i'm following");
   const [followRepromptMessage, setFollowRepromptMessage] = useState("");
   const [postDeliveryQuestion, setPostDeliveryQuestion] = useState("");
+  const [postDeliveryAnswers, setPostDeliveryAnswers] = useState<string[]>([
+    "",
+    "",
+  ]);
   const [followUpEnabled, setFollowUpEnabled] = useState(false);
   const [followUpMessage, setFollowUpMessage] = useState("");
   const [followUpDelayMinutes, setFollowUpDelayMinutes] = useState(0);
@@ -294,6 +299,9 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         );
         setFollowRepromptMessage(c.followRepromptMessage ?? "");
         setPostDeliveryQuestion(c.postDeliveryQuestion ?? "");
+        setPostDeliveryAnswers(
+          c.postDeliveryAnswers?.length ? c.postDeliveryAnswers : ["", ""]
+        );
         setFollowUpEnabled(c.followUpEnabled ?? false);
         setFollowUpMessage(c.followUpMessage ?? "");
         setFollowUpDelayMinutes(c.followUpDelayMinutes ?? 0);
@@ -436,6 +444,9 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         : "",
       followRepromptMessage: requireFollow ? followRepromptMessage.trim() : "",
       postDeliveryQuestion: requireFollow ? postDeliveryQuestion.trim() : "",
+      postDeliveryAnswers: requireFollow
+        ? postDeliveryAnswers.map((a) => a.trim()).filter(Boolean)
+        : [],
       followUpEnabled,
       followUpMessage: followUpEnabled ? followUpMessage.trim() : "",
       followUpDelayMinutes: followUpEnabled ? followUpDelayMinutes : 0,
@@ -903,10 +914,48 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none resize-none"
                   maxLength={1000}
                 />
+                <div className="space-y-2 rounded-lg border border-border p-3">
+                  <span className="text-sm text-foreground">
+                    tappable answers
+                  </span>
+                  {postDeliveryAnswers.map((answer, index) => (
+                    <input
+                      key={index}
+                      value={answer}
+                      onChange={(e) =>
+                        setPostDeliveryAnswers(
+                          postDeliveryAnswers.map((a, i) =>
+                            i === index ? e.target.value : a
+                          )
+                        )
+                      }
+                      placeholder={
+                        index === 0
+                          ? "Agilizar proyectos"
+                          : "Saltar a BIM Manager"
+                      }
+                      maxLength={20}
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
+                    />
+                  ))}
+                  {postDeliveryAnswers.length < 3 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPostDeliveryAnswers([...postDeliveryAnswers, ""])
+                      }
+                      className="text-xs text-accent hover:underline"
+                    >
+                      + Add another answer
+                    </button>
+                  )}
+                </div>
                 <p className="text-xs text-muted">
-                  Optional question shown with the resource, next to a button
-                  that opens your DMs to answer it. Their reply is what starts
-                  the conversation your inbox tool picks up.
+                  Someone who already follows skips the gate: they get the
+                  resource right away, with this question and these answers as
+                  chips. Tapping one posts it as their own message, which is
+                  what wakes your inbox tool&apos;s bot. Max 20 characters each.
+                  Leave them empty and everyone goes through the gate instead.
                 </p>
                 <p className="text-xs text-muted">
                   We send the link only after they tap the button and Instagram

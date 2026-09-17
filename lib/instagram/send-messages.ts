@@ -170,6 +170,7 @@ export async function sendPrivateReplyWithLinkButton({
   text,
   buttons,
   postId,
+  quickReplies,
 }: {
   context: InstagramContext;
   instagramAccountId: string;
@@ -177,6 +178,7 @@ export async function sendPrivateReplyWithLinkButton({
   text: string;
   buttons: meta.LinkButton[];
   postId?: string;
+  quickReplies?: meta.QuickReply[];
 }) {
   if (context.provider === "META")
     return meta.sendPrivateReplyWithLinkButton(
@@ -184,7 +186,8 @@ export async function sendPrivateReplyWithLinkButton({
       instagramAccountId,
       commentId,
       text,
-      buttons
+      buttons,
+      quickReplies
     );
   return sendZernioMessage({
     context,

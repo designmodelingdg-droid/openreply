@@ -638,7 +638,8 @@ describe("DM Worker — Full Pipeline", () => {
       [
         { title: "Get offer", url: "http://localhost:3000/r/abc123" },
         { title: "Book a call", url: "http://localhost:3000/r/def456" },
-      ]
+      ],
+      undefined
     );
   });
 
@@ -709,11 +710,87 @@ describe("DM Worker — Full Pipeline", () => {
       "ig_456",
       "comment_555",
       "Follow me first commenter_user, then tap 👇",
-      [{ title: "Ya te sigo", url: "http://localhost:3000/g/gate_tok" }]
+      [{ title: "Ya te sigo", url: "http://localhost:3000/g/gate_tok" }],
+      undefined
     );
     // The resource link is never in that message — it is what the gate hands
     // over once the follow checks out.
     expect(mockSendPrivateReply).not.toHaveBeenCalled();
+  });
+
+  // The point of the quick replies: a tap posts the answer into the thread as
+  // the commenter's own message, which is the only thing that wakes a bot in an
+  // inbox another app owns.
+  it("should send a follower the resource with tappable answers, no gate", async () => {
+    mockGetUserFollowStatus.mockResolvedValue(true);
+    mockPrisma.automation.findMany.mockResolvedValue([
+      {
+        ...mockAutomation,
+        requireFollow: true,
+        followGateWeb: true,
+        dmMessage: "¡Listo {username}! Aquí tienes tu guía.",
+        linkButtonLabel: "Descargar la guía",
+        postDeliveryQuestion: "¿Para agilizar proyectos o para BIM Manager?",
+        postDeliveryAnswers: ["Agilizar proyectos", "Saltar a BIM Manager"],
+        trackedLinks: [
+          {
+            slug: "abc123",
+            label: "Primary campaign link",
+            destinationUrl: "https://example.com",
+          },
+        ],
+      },
+    ]);
+
+    const processor = getProcessor();
+    await processor(createMockJob());
+
+    expect(mockPrisma.followGate.upsert).not.toHaveBeenCalled();
+    expect(mockSendPrivateReplyWithLinkButton).toHaveBeenCalledWith(
+      "decrypted_token",
+      "ig_456",
+      "comment_555",
+      "¡Listo commenter_user! Aquí tienes tu guía.\n\n¿Para agilizar proyectos o para BIM Manager?",
+      [{ title: "Descargar la guía", url: "http://localhost:3000/r/abc123" }],
+      [
+        { title: "Agilizar proyectos", payload: "answer:auto_789:Agilizar proyectos" },
+        { title: "Saltar a BIM Manager", payload: "answer:auto_789:Saltar a BIM Manager" },
+      ]
+    );
+  });
+
+  // Without answers there is nothing to tap, so the gate stays in charge.
+  it("should still gate a follower when no answers are configured", async () => {
+    mockGetUserFollowStatus.mockResolvedValue(true);
+    mockPrisma.followGate.upsert.mockResolvedValue({ token: "gate_tok" });
+    mockPrisma.automation.findMany.mockResolvedValue([
+      {
+        ...mockAutomation,
+        requireFollow: true,
+        followGateWeb: true,
+        followPromptButtonLabel: "Ya te sigo",
+        postDeliveryAnswers: [],
+        trackedLinks: [
+          {
+            slug: "abc123",
+            label: "Primary campaign link",
+            destinationUrl: "https://example.com",
+          },
+        ],
+      },
+    ]);
+
+    const processor = getProcessor();
+    await processor(createMockJob());
+
+    expect(mockSendPrivateReplyWithLinkButton).toHaveBeenCalledWith(
+      "decrypted_token",
+      "ig_456",
+      "comment_555",
+      expect.any(String),
+      [{ title: "Ya te sigo", url: "http://localhost:3000/g/gate_tok" }],
+      undefined
+    );
   });
 
   it("should skip the prompt and send the link when the commenter already follows", async () => {
@@ -746,7 +823,8 @@ describe("DM Worker — Full Pipeline", () => {
       "ig_456",
       "comment_555",
       "Hey commenter_user! Here is the offer:",
-      [{ title: "Get offer", url: "http://localhost:3000/r/abc123" }]
+      [{ title: "Get offer", url: "http://localhost:3000/r/abc123" }],
+      undefined
     );
   });
 

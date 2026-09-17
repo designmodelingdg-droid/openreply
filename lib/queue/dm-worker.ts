@@ -632,7 +632,45 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     }
 
     try {
-      if (webFollowGate) {
+      // Someone Instagram confirms already follows has nothing left to verify,
+      // and the gate would only put a browser between them and the resource.
+      // They get it in this message instead — with the opening question as
+      // quick replies, so their tap lands in the thread as their own message
+      // and whoever owns the inbox can take the conversation from there.
+      const answers = (automation.postDeliveryAnswers ?? [])
+        .map((answer) => answer.trim())
+        .filter(Boolean);
+      const followerShortcut =
+        webFollowGate &&
+        answers.length > 0 &&
+        automation.trackedLinks.length > 0 &&
+        (await getUserFollowStatus({
+          context: accessToken,
+          recipientId: commenterId,
+        })) === true;
+
+      if (followerShortcut) {
+        const question = automation.postDeliveryQuestion?.trim();
+        const body = renderMessageWithoutLink({
+          message: automation.dmMessage,
+          commenterName,
+        });
+        await sendPrivateReplyWithLinkButton({
+          context: accessToken,
+          instagramAccountId: automation.instagramAccount.instagramId,
+          commentId: commentId,
+          text: question ? `${body}\n\n${question}` : body,
+          buttons: buildLinkButtons(
+            automation.trackedLinks,
+            automation.linkButtonLabel
+          ),
+          quickReplies: answers.map((answer) => ({
+            title: answer,
+            payload: `answer:${automation.id}:${answer}`,
+          })),
+          postId: mediaId,
+        });
+      } else if (webFollowGate) {
         const gateUrl = buildFollowGateUrl(
           await issueFollowGate({
             automationId: automation.id,

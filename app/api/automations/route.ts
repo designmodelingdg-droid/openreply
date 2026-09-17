@@ -38,6 +38,8 @@ const createAutomationSchema = z
     followPromptButtonLabel: z.string().max(20).optional().nullable(),
     followRepromptMessage: z.string().max(1000).optional().nullable(),
     postDeliveryQuestion: z.string().max(1000).optional().nullable(),
+    // Instagram caps a quick reply title at 20 characters and the list at 13.
+    postDeliveryAnswers: z.array(z.string().max(20)).max(13).optional(),
     followUpEnabled: z.boolean().optional().default(false),
     followUpMessage: z.string().max(1000).optional().nullable(),
     // Minutes to wait before the follow-up. Capped at 24h so it stays inside
@@ -104,6 +106,7 @@ const updateAutomationSchema = z.object({
   followPromptButtonLabel: z.string().max(20).optional().nullable(),
   followRepromptMessage: z.string().max(1000).optional().nullable(),
   postDeliveryQuestion: z.string().max(1000).optional().nullable(),
+  postDeliveryAnswers: z.array(z.string().max(20)).max(13).optional(),
   followUpEnabled: z.boolean().optional(),
   followUpMessage: z.string().max(1000).optional().nullable(),
   followUpDelayMinutes: z.number().int().min(0).max(1440).optional(),
@@ -426,6 +429,9 @@ export async function POST(request: NextRequest) {
       postDeliveryQuestion: parsed.data.requireFollow
         ? parsed.data.postDeliveryQuestion || null
         : null,
+      postDeliveryAnswers: parsed.data.requireFollow
+        ? (parsed.data.postDeliveryAnswers ?? []).filter((a) => a.trim())
+        : [],
       followUpEnabled: parsed.data.followUpEnabled,
       followUpMessage: parsed.data.followUpEnabled
         ? parsed.data.followUpMessage || null
@@ -531,6 +537,7 @@ export async function PATCH(request: NextRequest) {
     automationData.followPromptButtonLabel = null;
     automationData.followRepromptMessage = null;
     automationData.postDeliveryQuestion = null;
+    automationData.postDeliveryAnswers = [];
   }
   if (automationData.followUpEnabled === false) {
     automationData.followUpMessage = null;

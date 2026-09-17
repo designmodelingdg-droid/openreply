@@ -333,6 +333,29 @@ export interface LinkButton {
   url: string;
 }
 
+/**
+ * A tappable chip that, unlike a button, posts its title into the thread as a
+ * message FROM the person who tapped it.
+ *
+ * That difference is the whole point: a button tap is a postback or a browser
+ * navigation, invisible to whoever else is watching the conversation. A quick
+ * reply is an inbound message, so the app that owns the thread sees it and a
+ * bot can pick the conversation up from there. Instagram caps the title at 20
+ * characters and the list at 13.
+ */
+export interface QuickReply {
+  title: string;
+  payload: string;
+}
+
+function toQuickReplies(quickReplies: QuickReply[]) {
+  return quickReplies.slice(0, 13).map((reply) => ({
+    content_type: "text",
+    title: reply.title.slice(0, 20),
+    payload: reply.payload.slice(0, 1000),
+  }));
+}
+
 function toWebUrlButtons(buttons: LinkButton[]) {
   return buttons
     .slice(0, 3)
@@ -349,7 +372,8 @@ export async function sendPrivateReplyWithLinkButton(
   instagramAccountId: string,
   commentId: string,
   text: string,
-  buttons: LinkButton[]
+  buttons: LinkButton[],
+  quickReplies?: QuickReply[]
 ): Promise<{ recipient_id: string; message_id: string }> {
   const response = await fetch(
     `${instagramGraphBase()}/${instagramAccountId}/messages`,
@@ -370,6 +394,9 @@ export async function sendPrivateReplyWithLinkButton(
               buttons: toWebUrlButtons(buttons),
             },
           },
+          ...(quickReplies?.length
+            ? { quick_replies: toQuickReplies(quickReplies) }
+            : {}),
         },
       }),
     }
