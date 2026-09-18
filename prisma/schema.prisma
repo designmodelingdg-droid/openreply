@@ -23,6 +23,7 @@ model User {
   ownedWorkspaces   Workspace[]       @relation("WorkspaceOwner")
   workspaceMembers  WorkspaceMember[]
   sentInvitations   WorkspaceInvitation[] @relation("WorkspaceInvitationsSent")
+  apiKeys           ApiKey[]
 }
 
 model Account {
@@ -78,6 +79,7 @@ model Workspace {
   zernioConnection  ZernioConnection?
   members           WorkspaceMember[]
   invitations       WorkspaceInvitation[]
+  apiKeys           ApiKey[]
   instagramAccounts InstagramAccount[]
   automations       Automation[]
   dmLogs            DmLog[]
@@ -463,4 +465,27 @@ model FollowGate {
 
   @@unique([automationId, igsid])
   @@index([automationId])
+}
+
+/// A key that lets a script act on a workspace the way an admin would, without
+/// a browser session — the only other way in is the magic-link cookie.
+///
+/// Only the SHA-256 of the key is stored. The key itself is shown once, at
+/// creation, and cannot be recovered; the prefix is kept so a list of keys is
+/// readable ("or_a1b2…") without giving anything away.
+model ApiKey {
+  id          String    @id @default(cuid())
+  workspaceId String
+  createdById String
+  name        String
+  keyHash     String    @unique
+  prefix      String
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }

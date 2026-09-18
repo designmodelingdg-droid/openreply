@@ -47,6 +47,15 @@ interface WorkspaceMembersData {
   }>;
 }
 
+interface ApiKeySummary {
+  id: string;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  createdBy: { email: string | null };
+}
+
 export default function SettingsPage() {
   const [data, setData] = useState<SettingsData | null>(null);
   const [membersData, setMembersData] = useState<WorkspaceMembersData | null>(
@@ -57,18 +66,57 @@ export default function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"ADMIN" | "MEMBER">("MEMBER");
   const [memberError, setMemberError] = useState<string | null>(null);
+  const [apiKeys, setApiKeys] = useState<ApiKeySummary[]>([]);
+  const [apiKeyName, setApiKeyName] = useState("");
+  // The plaintext of the key just minted. Shown once; the server never
+  // returns it again, so closing this is closing it for good.
+  const [freshApiKey, setFreshApiKey] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/dashboard/stats").then((res) => res.json()),
       fetch("/api/workspace/members").then((res) => res.json()),
+      fetch("/api/workspace/api-keys").then((res) => res.json()),
     ])
-      .then(([statsPayload, membersPayload]) => {
+      .then(([statsPayload, membersPayload, keysPayload]) => {
         if (statsPayload.success) setData(statsPayload.data);
         if (membersPayload.success) setMembersData(membersPayload.data);
+        if (keysPayload.success) setApiKeys(keysPayload.data.keys);
       })
       .finally(() => setLoading(false));
   }, []);
+
+  async function createKey(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy("apikey:create");
+    const res = await fetch("/api/workspace/api-keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: apiKeyName }),
+    });
+    const payload = await res.json();
+    if (payload.success) {
+      setApiKeys(payload.data.keys);
+      setFreshApiKey(payload.data.key);
+      setApiKeyName("");
+    }
+    setBusy(null);
+  }
+
+  async function revokeKey(id: string) {
+    if (!confirm("Revoke this key? Anything using it stops working immediately.")) {
+      return;
+    }
+    setBusy(`apikey:${id}`);
+    const res = await fetch("/api/workspace/api-keys", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const payload = await res.json();
+    if (payload.success) setApiKeys(payload.data.keys);
+    setBusy(null);
+  }
 
   async function refreshMembers() {
     const res = await fetch("/api/workspace/members");
@@ -323,6 +371,102 @@ export default function SettingsPage() {
           </form>
         )}
       </section>
+
+      {canManageMembers && (
+        <section className="panel rounded p-4 sm:p-6">
+          <h2 className="text-base font-semibold mb-2">API keys</h2>
+          <p className="mb-6 text-sm text-muted">
+            Let a script create and edit campaigns without signing in. A key
+            acts as an admin of this workspace. Send it as{" "}
+            <code className="rounded bg-surface px-1 py-0.5 text-xs">
+              Authorization: Bearer or_…
+            </code>{" "}
+            on any request to <code className="text-xs">/api/automations</code>.
+          </p>
+
+          {freshApiKey && (
+            <div className="mb-6 rounded border border-accent/40 bg-accent/5 p-4">
+              <p className="mb-2 text-sm font-semibold text-foreground">
+                Copy this key now. It will not be shown again.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <code className="flex-1 select-all break-all rounded bg-surface px-3 py-2 font-mono text-xs text-foreground">
+                  {freshApiKey}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => void navigator.clipboard?.writeText(freshApiKey)}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:border-border-hover hover:text-foreground"
+                >
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFreshApiKey(null)}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:border-border-hover hover:text-foreground"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {apiKeys.length === 0 && (
+              <p className="text-sm text-muted">No keys yet.</p>
+            )}
+            {apiKeys.map((key) => (
+              <div
+                key={key.id}
+                className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-0"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {key.name}{" "}
+                    <span className="font-mono text-xs text-muted">{key.prefix}…</span>
+                  </p>
+                  <p className="text-xs text-muted">
+                    {key.lastUsedAt
+                      ? `Last used ${new Date(key.lastUsedAt).toLocaleDateString()}`
+                      : "Never used"}
+                    {key.createdBy.email ? ` · created by ${key.createdBy.email}` : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => revokeKey(key.id)}
+                  disabled={busy === `apikey:${key.id}`}
+                  className="rounded-lg border border-error/20 px-3 py-1.5 text-xs font-medium text-error transition-colors hover:bg-error/10 disabled:opacity-50"
+                >
+                  Revoke
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <form
+            onSubmit={createKey}
+            className="mt-6 grid gap-3 border-t border-border pt-4 sm:grid-cols-[1fr_auto]"
+          >
+            <input
+              type="text"
+              value={apiKeyName}
+              onChange={(event) => setApiKeyName(event.target.value)}
+              placeholder="What will use it, e.g. matriz de contenido"
+              className="rounded border border-border bg-surface px-4 py-2 text-sm text-foreground outline-none transition-colors focus:border-accent/40"
+              maxLength={60}
+              required
+            />
+            <button
+              type="submit"
+              disabled={busy === "apikey:create"}
+              className="rounded bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+            >
+              {busy === "apikey:create" ? "Creating..." : "Create key"}
+            </button>
+          </form>
+        </section>
+      )}
 
       <section className="panel rounded p-4 sm:p-6">
         <h2 className="text-base font-semibold mb-6">Usage</h2>
