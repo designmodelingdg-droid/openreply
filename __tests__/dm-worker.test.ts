@@ -234,13 +234,15 @@ beforeEach(() => {
   mockPrisma.automation.findFirst.mockResolvedValue(null);
   mockPrisma.dmLog.findUnique.mockResolvedValue(null);
   mockPrisma.dmLog.create.mockResolvedValue({});
-  // Two different lookups share findFirst: the cross-campaign private-reply
-  // check (keyed on status SENT) and the postback's name lookup. Only the
-  // latter should resolve by default, or every comment would look like a
-  // duplicate of an already-answered one.
+  // Three different lookups share findFirst: the cross-campaign private-reply
+  // check (keyed on status SENT), the one-DM-per-person check (the only one
+  // with an OR clause) and the postback's name lookup. Only the last should
+  // resolve by default, or every comment would look like a duplicate.
   mockPrisma.dmLog.findFirst.mockImplementation(
-    async (args: { where?: { status?: string } } = {}) =>
-      args.where?.status === "SENT" ? null : { commenterName: "commenter_user" }
+    async (args: { where?: { status?: string; OR?: unknown } } = {}) =>
+      args.where?.status === "SENT" || args.where?.OR
+        ? null
+        : { commenterName: "commenter_user" }
   );
   mockPrisma.dmLog.upsert.mockResolvedValue({});
   mockPrisma.dmLog.update.mockResolvedValue({});
@@ -1085,6 +1087,33 @@ describe("DM Worker — one private reply per comment", () => {
         data: expect.objectContaining({
           status: "SKIPPED_DEDUP",
           errorMessage: expect.stringContaining("openreply 1"),
+        }),
+      })
+    );
+  });
+
+  // "Comment BIM or IA" gets people commenting both. Each comment is its own
+  // private reply, so without this the same person gets the same DM twice.
+  it("should send one DM per person per campaign, still answering publicly", async () => {
+    mockPrisma.dmLog.findFirst.mockImplementation(
+      async (args: { where?: { status?: string; OR?: unknown } } = {}) => {
+        if (args.where?.OR) return { commentId: "comment_earlier" };
+        if (args.where?.status === "SENT") return null;
+        return { commenterName: "commenter_user" };
+      }
+    );
+
+    const processor = getProcessor();
+    await processor(createMockJob());
+
+    expect(mockSendPrivateReply).not.toHaveBeenCalled();
+    expect(mockSendPrivateReplyWithLinkButton).not.toHaveBeenCalled();
+    expect(mockReserveWorkspaceDMSend).not.toHaveBeenCalled();
+    expect(mockPrisma.dmLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "SKIPPED_DEDUP",
+          errorMessage: expect.stringContaining("already received"),
         }),
       })
     );

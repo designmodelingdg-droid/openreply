@@ -504,6 +504,35 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
       continue;
     }
 
+    // One DM per person per campaign. A post that says "comment BIM or IA"
+    // gets people commenting both, and each comment is its own private reply
+    // — so the same person would receive the same message twice, back to
+    // back. The public reply above still answers every comment; only the DM
+    // is held back once this campaign has already reached them.
+    const alreadyReached = await prisma.dmLog.findFirst({
+      where: {
+        automationId: automation.id,
+        commenterId,
+        commentId: { not: commentId },
+        OR: [{ status: "SENT" }, { dmDeliveryUnconfirmed: true }],
+      },
+      select: { commentId: true },
+    });
+    if (alreadyReached) {
+      await prisma.dmLog.update({
+        where: {
+          automationId_commentId: { automationId: automation.id, commentId },
+        },
+        data: {
+          status: "SKIPPED_DEDUP",
+          matchedKeyword: matchResult.matchedKeyword,
+          errorMessage:
+            "This person already received this campaign's DM on an earlier comment",
+        },
+      });
+      continue;
+    }
+
     const usage = await reserveWorkspaceDMSend(automation.workspaceId);
     if (!usage.allowed) {
       await prisma.dmLog.update({
