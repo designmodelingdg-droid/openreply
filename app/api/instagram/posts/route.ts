@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentWorkspaceId } from "@/lib/auth";
+import { getCurrentWorkspaceContext } from "@/lib/workspace-access";
 import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
 import { getAllUserMedia, getUserMedia } from "@/lib/instagram/provider";
 import { createInstagramContext } from "@/lib/instagram/provider";
 
 export async function GET(request: NextRequest) {
-  const workspaceId = await getCurrentWorkspaceId();
+  const workspaceId = (await getCurrentWorkspaceContext())?.workspaceId ?? null;
   if (!workspaceId) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },

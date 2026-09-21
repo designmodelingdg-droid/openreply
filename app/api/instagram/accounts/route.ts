@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentWorkspaceId } from "@/lib/auth";
+import { getCurrentWorkspaceContext } from "@/lib/workspace-access";
 import { prisma } from "@/lib/db/client";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ export const runtime = "nodejs";
  * (e.g. the inbox) should use this so they aren't gated on heavy stats.
  */
 export async function GET() {
-  const workspaceId = await getCurrentWorkspaceId();
+  const workspaceId = (await getCurrentWorkspaceContext())?.workspaceId ?? null;
   if (!workspaceId) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },

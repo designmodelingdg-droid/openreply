@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentWorkspaceId } from "@/lib/auth";
+import { getCurrentWorkspaceContext } from "@/lib/workspace-access";
 import { prisma } from "@/lib/db/client";
 import { getWorkspaceInstagramAccount } from "@/lib/instagram-accounts";
 import {
@@ -96,7 +96,7 @@ function isVideoLike(media: InstagramMedia): boolean {
 }
 
 export async function GET(request: NextRequest) {
-  const workspaceId = await getCurrentWorkspaceId();
+  const workspaceId = (await getCurrentWorkspaceContext())?.workspaceId ?? null;
   if (!workspaceId) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },

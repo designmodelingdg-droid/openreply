@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUserId, getCurrentWorkspaceId } from "@/lib/auth";
+import { getCurrentWorkspaceContext } from "@/lib/workspace-access";
 import { prisma } from "@/lib/db/client";
 import {
   calculateCtr,
@@ -8,7 +8,8 @@ import {
 } from "@/lib/tracking/analytics";
 
 export async function GET(request: NextRequest) {
-  const workspaceId = await getCurrentWorkspaceId();
+  const context = await getCurrentWorkspaceContext();
+  const workspaceId = context?.workspaceId ?? null;
   if (!workspaceId) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const userId = await getCurrentUserId();
+  const userId = context?.userId ?? null;
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
