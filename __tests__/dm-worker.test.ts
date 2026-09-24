@@ -766,6 +766,42 @@ describe("DM Worker — Full Pipeline", () => {
     );
   });
 
+  // A campaign can be a conversation and nothing else: no resource, just the
+  // question and its answers. Then all three buttons are the answers, and a
+  // follower must get them at comment time rather than being sent to a page
+  // that has nothing to hand over.
+  it("should send a follower only answer buttons when there is no link", async () => {
+    mockGetUserFollowStatus.mockResolvedValue(true);
+    mockPrisma.automation.findMany.mockResolvedValue([
+      {
+        ...mockAutomation,
+        requireFollow: true,
+        followGateWeb: true,
+        dmMessage: "¡Hola {username}! Cuéntame:",
+        linkButtonLabel: null,
+        postDeliveryQuestion: "¿Ya eres alumno?",
+        postDeliveryAnswers: ["Sí", "Todavía no", "Quiero info"],
+        trackedLinks: [],
+      },
+    ]);
+
+    const processor = getProcessor();
+    await processor(createMockJob());
+
+    expect(mockPrisma.followGate.upsert).not.toHaveBeenCalled();
+    expect(mockSendPrivateReplyWithButtons).toHaveBeenCalledWith(
+      "decrypted_token",
+      "ig_456",
+      "comment_555",
+      "¡Hola commenter_user! Cuéntame:\n\n¿Ya eres alumno?",
+      [
+        { type: "postback", title: "Sí", payload: "answer:auto_789:Sí" },
+        { type: "postback", title: "Todavía no", payload: "answer:auto_789:Todavía no" },
+        { type: "postback", title: "Quiero info", payload: "answer:auto_789:Quiero info" },
+      ]
+    );
+  });
+
   // Three buttons is Instagram's cap and the link takes one, so a third answer
   // has nowhere to go and is dropped rather than pushing the link out.
   it("should keep the link button and drop answers past the third slot", async () => {

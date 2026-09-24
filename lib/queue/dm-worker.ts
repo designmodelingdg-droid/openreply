@@ -680,10 +680,11 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
         .map((answer) => answer.trim())
         .filter(Boolean)
         .slice(0, Math.max(0, 3 - linkButtons.length));
+      // A campaign with answers and no link is a conversation opener: the
+      // follower gets the question and up to three answers, nothing to open.
       const followerShortcut =
         webFollowGate &&
         answers.length > 0 &&
-        linkButtons.length > 0 &&
         (await getUserFollowStatus({
           context: accessToken,
           recipientId: commenterId,
