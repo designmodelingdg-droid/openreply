@@ -86,6 +86,11 @@ function isTemplateRejection(error: unknown): boolean {
   ) {
     return false;
   }
+  // Meta's generic code 1 is not a rejection of the template: the message
+  // with the button usually arrives anyway. Sending the text version on top
+  // of it is exactly how a commenter ended up with the same DM twice, once
+  // with the button and once as plain text with the URL.
+  if (isUnconfirmedMetaSend(error)) return false;
   const message = error instanceof Error ? error.message : "";
   return !NON_TEMPLATE_REJECTIONS.some((pattern) => pattern.test(message));
 }

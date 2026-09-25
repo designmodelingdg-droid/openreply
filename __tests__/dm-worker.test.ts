@@ -547,6 +547,40 @@ describe("DM Worker — Full Pipeline", () => {
     });
   });
 
+  // Regression: the button template answered with Meta's code 1 was treated
+  // as a template rejection, so the worker sent the inline-link text as well.
+  // The template had been delivered, and the commenter got the DM twice.
+  it("does not send the text fallback after a Meta code 1 on the button template", async () => {
+    const { MetaApiError } = await import("@/lib/meta/client");
+    mockGetUserFollowStatus.mockResolvedValue(false);
+    mockPrisma.followGate.upsert.mockResolvedValue({ token: "gate_tok" });
+    mockPrisma.automation.findMany.mockResolvedValue([
+      {
+        ...mockAutomation,
+        requireFollow: true,
+        followGateWeb: true,
+        followPromptMessage: "Follow me first {username}, then tap 👇",
+        followPromptButtonLabel: "Ya te sigo",
+        trackedLinks: [
+          { slug: "abc123", label: "Primary campaign link", destinationUrl: "https://example.com" },
+        ],
+      },
+    ]);
+    mockSendPrivateReplyWithLinkButton.mockRejectedValue(
+      new MetaApiError(1, undefined, "trace_x", "An unknown error has occurred. (/v25.0/ig_456/messages)")
+    );
+
+    const processor = getProcessor();
+    await expect(processor(createMockJob())).resolves.toBeUndefined();
+
+    expect(mockSendPrivateReply).not.toHaveBeenCalled();
+    expect(mockPrisma.dmLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "FAILED", dmDeliveryUnconfirmed: true }),
+      })
+    );
+  });
+
   it("still re-throws a Meta error that is a real rejection", async () => {
     const { MetaApiError } = await import("@/lib/meta/client");
     mockSendPrivateReply.mockRejectedValue(
